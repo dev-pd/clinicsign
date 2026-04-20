@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: clinicsign
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  localstack:
+    image: localstack/localstack:4.4.0
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: s3
+      DEBUG: "0"
+    volumes:
+      - localstack_data:/var/lib/localstack
+
+  # Containerized API on host :4001 so it never clashes with local `npm run dev` (:4000).
+  # Start with: docker compose --profile docker-api up -d --build api
+  # Or: npm run docker:api
+  api:
+    profiles:
+      - docker-api
+    image: clinicsign-api:local
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "4001:4000"
+    environment:
+      PORT: "4000"
+
+volumes:
+  postgres_data:
+  localstack_data:

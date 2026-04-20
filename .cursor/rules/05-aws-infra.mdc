@@ -1,0 +1,150 @@
+---
+description: AWS infrastructure, S3, SES, ECS, and Docker standards
+globs: ["**/Dockerfile", "**/docker-compose.yml", "**/infra/**", "apps/api/src/services/s3.service.ts", "apps/api/src/services/email.service.ts"]
+alwaysApply: false
+---
+
+# AWS and infrastructure standards
+
+## HIPAA-eligible services only
+
+Only use AWS services that are HIPAA-eligible and covered by the AWS Business Associate Addendum. For this project that means: S3, SES, RDS (PostgreSQL), ECS Fargate, CloudWatch, IAM, VPC, Secrets Manager, KMS, ELB, Route 53, CloudFront.
+
+Do not introduce a non-HIPAA-eligible service without explicit approval.
+
+## Encryption
+
+- **In transit**: TLS 1.2 or higher everywhere. Public endpoints go through ALB or CloudFront with AWS Certificate Manager certs. Internal service-to-service also TLS.
+- **At rest**: Enable server-side encryption on every data store.
+  - S3: `ServerSideEncryption: "aws:kms"` with a customer-managed KMS key (CMK) for PHI buckets.
+  - RDS: storage encryption enabled at instance creation. Cannot be added later.
+  - CloudWatch Logs: log groups encrypted with KMS.
+- **Application secrets**: AWS Secrets Manager or SSM Parameter Store (SecureString), not env vars in task definition for prod. Rotate regularly.
+
+## IAM and least privilege
+
+- Every service has its own IAM role with the minimum permissions needed. No wildcards.
+- ECS task role: S3 access scoped to the specific bucket, SES send permission scoped to verified identities, Secrets Manager read access to specific secret ARNs only.
+- No long-lived IAM user access keys in production. Use IAM roles via ECS task role or instance profile.
+- For local dev, use short-lived credentials via `aws sso login` or named profiles. Never commit access keys.
+
+## S3
+
+- One bucket per environment: `clinicsign-dev`, `clinicsign-prod`. Include region in name if multi-region.
+- Block all public access at the bucket level. Always.
+- Versioning enabled on the bucket so accidental overwrites are recoverable.
+- Lifecycle rules: transition to Glacier after 90 days for signed documents (long-term retention), delete draft uploads never sent after 30 days.
+- Server-side encryption with KMS CMK. Enforce via bucket policy.
+- Bucket policy denies unencrypted uploads: `"s3:x-amz-server-side-encryption": "aws:kms"`.
+- Object keys structured: `clinics/{clinicId}/documents/{documentId}/original.pdf` and `.../signed.pdf` and `.../signatures/{recipientId}.png`.
+- Access via presigned URLs, short TTL (5-15 minutes). Never make objects public.
+- CloudTrail data events on the PHI bucket for audit.
+
+## SES
+
+- Verified sending identity: domain verification with DKIM and SPF configured in Route 53.
+- Start in SES sandbox, request production access for demo.
+- From address is a monitored mailbox on the verified domain.
+- Include SPF, DKIM, DMARC records to avoid spam filtering.
+- Bounce and complaint handling: SNS topic receives notifications, webhook back to the app to mark recipient addresses as undeliverable.
+- Do not send PHI in email subject or preview. Email body can contain the minimum necessary, but prefer a link to the app.
+
+## RDS
+
+- PostgreSQL 15 or higher. Single AZ fine for demo, Multi-AZ for real prod.
+- Instance in private subnets only. No public accessibility.
+- Security group allows connections only from the ECS task security group, on port 5432.
+- Automated backups with 7-day retention minimum. Snapshot before any migration in prod.
+- Parameter group with `rds.force_ssl = 1` to require TLS.
+- Enhanced monitoring enabled for production.
+
+## ECS Fargate
+
+- Task definition:
+  - CPU 512, memory 1024 for the API. Adjust based on load.
+  - Logging to CloudWatch Logs, structured JSON.
+  - Health check command: `curl -f http://localhost:4000/health || exit 1`, 30s interval.
+  - Task role ARN with least-privilege permissions.
+  - Execution role for pulling image from ECR and writing logs.
+- Service:
+  - Desired count: 2 for prod for HA, 1 for demo.
+  - Deployment: rolling with min 100% healthy, max 200% during deploy.
+  - Load balanced via ALB with health check on `/health`.
+  - Capacity providers: FARGATE. FARGATE_SPOT for non-critical workloads.
+
+## VPC and networking
+
+- Custom VPC with two AZs minimum. Public subnets for ALB, private subnets for ECS tasks and RDS.
+- NAT Gateway in each public subnet for ECS outbound internet (to reach S3, SES).
+- VPC endpoints for S3 and DynamoDB to avoid NAT data transfer costs.
+- Security groups: default deny. Only open the ports actually needed. Reference other SGs by ID, not by CIDR, where possible.
+
+## CloudWatch
+
+- Log groups per service: `/aws/ecs/clinicsign-api`, `/aws/ecs/clinicsign-web`.
+- Retention: 30 days for app logs, 90 days minimum for audit-relevant logs (consider HIPAA 6-year retention requirement for production).
+- Metrics filters on error logs to fire alarms.
+- Alarms: high 5xx rate on ALB, high CPU/memory on ECS, RDS connection exhaustion, SES bounce rate.
+- Dashboards per service.
+
+## CloudTrail
+
+- Enabled in all regions with log file validation.
+- Separate S3 bucket for CloudTrail logs with object lock for tamper evidence.
+- Data events on the PHI S3 bucket for GetObject and PutObject.
+
+## Docker
+
+- Multi-stage builds. Stage 1 installs deps and builds. Stage 2 is a minimal runtime with only production deps.
+- Base image: `node:20-alpine` for small size, or `node:20-slim` for glibc compatibility if native deps need it.
+- Run as non-root user:
+
+```dockerfile
+RUN addgroup -S app && adduser -S app -G app
+USER app
+```
+
+- Use `dumb-init` or `tini` as PID 1 for proper signal handling.
+- `.dockerignore` excludes `node_modules`, `.env`, `.git`, test files, coverage reports.
+- Pin the image tag, not `latest`. Use a specific digest in prod: `node:20-alpine@sha256:...`.
+- Health check baked into the image:
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:4000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+```
+
+## LocalStack for local development
+
+- LocalStack runs in Docker Compose alongside Postgres. Services enabled: S3, SES, STS.
+- Environment points to LocalStack endpoint (`http://localhost:4566`) in dev.
+- AWS SDK config: `endpoint`, `forcePathStyle: true` for S3, fake credentials (`test`/`test`).
+- An init script creates the S3 bucket and verifies the SES identity on Docker startup.
+- Config detects LocalStack via `AWS_ENDPOINT_URL` env var. In prod, this is unset.
+
+## Infrastructure as Code
+
+- Use AWS CDK (TypeScript) or Terraform. CDK preferred for TypeScript monorepos.
+- Infrastructure code lives in `infra/` at the repo root.
+- One stack per environment. Shared constructs in `infra/lib/`.
+- Never click-ops in production. Every change through CDK or Terraform.
+
+## Deployment pipeline
+
+- GitHub Actions workflow:
+  - On PR: lint, typecheck, test.
+  - On merge to main: build Docker image, push to ECR with git SHA tag, deploy to staging.
+  - On release tag: deploy to prod via CDK/Terraform.
+- Never deploy directly from a developer laptop to prod.
+- Every deploy produces an artifact tagged with the git SHA so rollback is trivial.
+
+## Things never do with AWS
+
+- Never put PHI in a bucket without encryption or with public access
+- Never use `*` in IAM policy actions or resources
+- Never hardcode AWS credentials in source code or Docker images
+- Never send PHI through SES in the subject line or preview text
+- Never expose RDS to the public internet
+- Never skip TLS for any traffic carrying PHI
+- Never disable CloudTrail
+- Never use an IAM user when an IAM role would work

@@ -1,0 +1,139 @@
+---
+description: Prisma ORM and PostgreSQL data access standards
+globs: ["apps/api/prisma/**", "apps/api/src/repositories/**/*.ts", "**/*.prisma"]
+alwaysApply: false
+---
+
+# Prisma and database standards
+
+## Schema conventions
+
+- Model names in PascalCase, singular: `User`, `Document`, `DocumentField`.
+- Field names in camelCase: `createdAt`, `clinicId`, `originalPdfKey`.
+- Primary keys are `id String @id @default(uuid())`. Do not use auto-increment integers.
+- Every model has `createdAt DateTime @default(now())`. Mutable models add `updatedAt DateTime @updatedAt`.
+- Foreign keys named `<entity>Id`: `clinicId`, `documentId`.
+- Relation fields named after the referenced entity: `clinic Clinic @relation(...)`.
+- Enum types in SCREAMING_SNAKE_CASE values, PascalCase names: `DocumentStatus`, `FieldType`.
+
+## Indexes
+
+- Every foreign key that is queried gets an index: `@@index([clinicId])`.
+- Compound indexes for common filter combinations: `@@index([clinicId, status])`.
+- Unique constraints as `@unique` on single field or `@@unique([a, b])` for composites.
+- Do not over-index. Every index costs writes.
+
+## Migrations
+
+- Use `prisma migrate dev --name <descriptive_name>` in development.
+- Migration names describe the change: `add_audit_log_table`, `add_document_expires_at`, not `update1`.
+- Never hand-edit migration SQL after it has been applied in any environment.
+- Use `prisma migrate deploy` in production. Never `migrate dev` in prod.
+- Commit migration files to git.
+
+## Prisma Client setup
+
+- Single PrismaClient instance for the app lifetime, exported from `src/lib/prisma.ts`.
+- In dev, preserve the client across hot reloads to avoid connection leaks:
+
+```ts
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: ["error", "warn"],
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
+```
+
+- Configure log levels per environment. Log queries in dev only.
+
+## Queries
+
+- Select only the fields you need with `select: { ... }`. Do not load entire rows when you need three columns.
+- Use `include` for relations only when the caller needs them. Otherwise paginate separately.
+- Paginate lists with `take` and `skip` or cursor-based pagination. Never load unbounded lists.
+- Use `findUnique` for single lookups on unique fields. `findFirst` only when you genuinely need ordering or multi-field matching.
+- Avoid N+1 by using `include` or splitting queries intentionally.
+
+## Transactions
+
+- Use `prisma.$transaction` when multiple writes must succeed together or all roll back.
+- Interactive transactions (with a callback) for logic that depends on reads within the transaction:
+
+```ts
+const result = await prisma.$transaction(async (tx) => {
+  const doc = await tx.document.create({ data: ... });
+  await tx.auditLog.create({ data: { documentId: doc.id, ... } });
+  return doc;
+});
+```
+
+- Array transactions for simple batched writes: `prisma.$transaction([op1, op2])`.
+- Set isolation level explicitly for contested operations: `{ isolationLevel: "Serializable" }`.
+- Keep transactions short. No network calls, no S3, no email inside a transaction.
+
+## Soft deletes
+
+- Prefer status transitions over hard deletes: `status = "VOIDED"` instead of `DELETE FROM`.
+- If you must hard delete, do it in a repository method named `hardDelete` to make the intent explicit.
+- Cascading deletes configured at the schema level with `onDelete: Cascade` when the child makes no sense without the parent.
+
+## Audit logging
+
+- Every state change writes an `AuditLog` row. This is append-only.
+- Never UPDATE or DELETE an audit log entry. There is no repository method for it.
+- Audit log includes: `documentId`, `actorType`, `actorId`, `eventType`, `metadata` (JSON), `timestamp`.
+- Metadata JSON captures context: IP, user agent, field values that were changed, previous status. Never include raw passwords or tokens.
+
+## Connection pooling
+
+- Configure `DATABASE_URL` with connection pool params: `?connection_limit=10&pool_timeout=20`.
+- For serverless or spiky workloads, use PgBouncer or Prisma Accelerate.
+- In RDS, set `max_connections` appropriately for the instance size.
+
+## Seeding
+
+- Seed script at `apps/api/prisma/seed.ts` creates deterministic demo data.
+- Include: 1 clinic, 1 provider user (email `demo@clinicsign.test`, password `DemoPass123`), 1 draft document.
+- Seed is idempotent: running twice should not create duplicates. Use `upsert` or check existence first.
+- Never seed real PHI or real email addresses.
+
+## Repository pattern
+
+- One repository per aggregate root: `user.repository.ts`, `document.repository.ts`, `audit-log.repository.ts`.
+- Repositories expose domain-oriented methods, not generic CRUD. Prefer `findPendingForClinic(clinicId)` over `findMany(where)`.
+- Pass an optional transaction client as the last parameter:
+
+```ts
+async function createDocument(
+  data: CreateDocumentInput,
+  tx?: Prisma.TransactionClient
+): Promise<Document> {
+  const client = tx ?? prisma;
+  return client.document.create({ data });
+}
+```
+
+## Data types
+
+- Money and decimals: `Decimal` in Prisma. Never store money as `Float`.
+- Timestamps: always `DateTime`. Store in UTC.
+- Text that could be large (PDF content, signatures): store in S3, keep only the key in DB.
+- JSON fields: typed with Prisma `Json` type and a Zod schema on both read and write.
+
+## Things never do with Prisma
+
+- Never call Prisma from a controller or service without going through a repository
+- Never store PDFs, images, or large blobs in the database
+- Never hard delete data that might be audited later
+- Never use raw SQL unless there is a documented reason (put it in a repository with a comment explaining why)
+- Never share Prisma client instances across requests via globals (except in dev as shown above)
+- Never run `migrate dev --create-only` without reviewing the generated SQL
+- Never commit an unreviewed generated migration

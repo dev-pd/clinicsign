@@ -1,0 +1,67 @@
+# Cursor setup files and personal notes (not part of the app)
+_setup/
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Next.js
+.next/
+out/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Prisma
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+
+# Testing
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local AWS / LocalStack data
+.localstack/
+volume/
+
+# Temp files
+*.tmp
+*.bak
+
+# Pulumi (infra/ is a standalone npm project; keep state and deps local)
+infra/bin/
+infra/node_modules/
+.pulumi/
+Pulumi.*.yaml.bak
+
+# Docker
+*.tar

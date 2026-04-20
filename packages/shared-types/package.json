@@ -1,0 +1,21 @@
+{
+  "name": "@clinicsign/shared-types",
+  "version": "0.0.0",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "echo \"@clinicsign/shared-types: no emit\"",
+    "lint": "echo \"noop\"",
+    "test": "echo \"noop\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

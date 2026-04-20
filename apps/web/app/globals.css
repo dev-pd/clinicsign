@@ -1,0 +1,297 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/**
+ * ClinicSign design tokens
+ * See apps/web/DESIGN_SYSTEM.md for the rationale behind every value.
+ * NEVER hardcode colors, radii, or shadows in components. Use tokens only.
+ */
+
+:root {
+  /* Surfaces */
+  --background: oklch(0.99 0.005 95);
+  --foreground: oklch(0.15 0.01 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.01 250);
+
+  /* Brand */
+  --primary: oklch(0.55 0.08 180);
+  --primary-foreground: oklch(0.99 0.005 95);
+
+  /* Secondary + muted + accent */
+  --secondary: oklch(0.96 0.01 95);
+  --secondary-foreground: oklch(0.25 0.02 180);
+  --muted: oklch(0.95 0.008 95);
+  --muted-foreground: oklch(0.5 0.02 250);
+  --accent: oklch(0.93 0.03 180);
+  --accent-foreground: oklch(0.25 0.05 180);
+
+  /* Status */
+  --destructive: oklch(0.55 0.15 28);
+  --destructive-foreground: oklch(0.99 0.005 95);
+  --success: oklch(0.55 0.10 150);
+  --success-foreground: oklch(0.99 0.005 95);
+  --warning: oklch(0.70 0.12 75);
+  --warning-foreground: oklch(0.20 0.05 75);
+  --info: oklch(0.60 0.08 230);
+  --info-foreground: oklch(0.99 0.005 95);
+
+  /* Borders + focus */
+  --border: oklch(0.90 0.008 95);
+  --input: oklch(0.90 0.008 95);
+  --ring: oklch(0.55 0.08 180);
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 oklch(0.15 0.01 250 / 0.04);
+  --shadow: 0 2px 8px -2px oklch(0.15 0.01 250 / 0.06), 0 1px 3px -1px oklch(0.15 0.01 250 / 0.04);
+  --shadow-md: 0 8px 24px -6px oklch(0.15 0.01 250 / 0.10), 0 2px 6px -2px oklch(0.15 0.01 250 / 0.05);
+  --shadow-lg: 0 16px 40px -12px oklch(0.15 0.01 250 / 0.14), 0 4px 12px -4px oklch(0.15 0.01 250 / 0.06);
+
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration: 220ms;
+  --duration-slow: 320ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Sidebar (dashboard layout) */
+  --sidebar: oklch(0.98 0.005 95);
+  --sidebar-foreground: oklch(0.15 0.01 250);
+  --sidebar-primary: oklch(0.55 0.08 180);
+  --sidebar-primary-foreground: oklch(0.99 0.005 95);
+  --sidebar-accent: oklch(0.93 0.03 180);
+  --sidebar-accent-foreground: oklch(0.25 0.05 180);
+  --sidebar-border: oklch(0.90 0.008 95);
+  --sidebar-ring: oklch(0.55 0.08 180);
+}
+
+.dark {
+  --background: oklch(0.12 0.01 250);
+  --foreground: oklch(0.95 0.005 95);
+  --card: oklch(0.16 0.01 250);
+  --card-foreground: oklch(0.95 0.005 95);
+  --popover: oklch(0.16 0.01 250);
+  --popover-foreground: oklch(0.95 0.005 95);
+
+  --primary: oklch(0.65 0.09 180);
+  --primary-foreground: oklch(0.12 0.01 250);
+
+  --secondary: oklch(0.22 0.01 250);
+  --secondary-foreground: oklch(0.95 0.005 95);
+  --muted: oklch(0.20 0.01 250);
+  --muted-foreground: oklch(0.65 0.02 250);
+  --accent: oklch(0.28 0.04 180);
+  --accent-foreground: oklch(0.95 0.005 95);
+
+  --destructive: oklch(0.60 0.16 28);
+  --destructive-foreground: oklch(0.95 0.005 95);
+  --success: oklch(0.62 0.11 150);
+  --success-foreground: oklch(0.12 0.01 250);
+  --warning: oklch(0.75 0.13 75);
+  --warning-foreground: oklch(0.12 0.01 250);
+  --info: oklch(0.68 0.09 230);
+  --info-foreground: oklch(0.12 0.01 250);
+
+  --border: oklch(0.25 0.01 250);
+  --input: oklch(0.25 0.01 250);
+  --ring: oklch(0.65 0.09 180);
+
+  --sidebar: oklch(0.14 0.01 250);
+  --sidebar-foreground: oklch(0.95 0.005 95);
+  --sidebar-primary: oklch(0.65 0.09 180);
+  --sidebar-primary-foreground: oklch(0.12 0.01 250);
+  --sidebar-accent: oklch(0.28 0.04 180);
+  --sidebar-accent-foreground: oklch(0.95 0.005 95);
+  --sidebar-border: oklch(0.25 0.01 250);
+  --sidebar-ring: oklch(0.65 0.09 180);
+}
+
+/**
+ * Expose tokens to Tailwind utilities via @theme inline
+ * Gives us bg-primary, text-foreground, border-border, etc.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: var(--radius-sm);
+  --radius: var(--radius);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-source-serif), Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-signature: var(--font-great-vibes), cursive;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: var(--ring);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -moz-tab-size: 4;
+    tab-size: 4;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Focus visible for keyboard users, hidden for mouse users */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Headings inherit semantic weight */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* Patient-facing pages (marked with data-audience="patient") get larger base */
+  [data-audience="patient"] {
+    font-size: 17px;
+    line-height: 1.6;
+  }
+
+  [data-audience="patient"] button,
+  [data-audience="patient"] a,
+  [data-audience="patient"] [role="button"] {
+    min-height: 44px;
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Text scale matching DESIGN_SYSTEM.md */
+  .text-display {
+    font-size: 3rem;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .text-h1 {
+    font-size: 2.25rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .text-h2 {
+    font-size: 1.75rem;
+    line-height: 1.25;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .text-h3 {
+    font-size: 1.375rem;
+    line-height: 1.3;
+    font-weight: 600;
+  }
+  .text-h4 {
+    font-size: 1.125rem;
+    line-height: 1.35;
+    font-weight: 600;
+  }
+  .text-body-lg {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    font-weight: 400;
+  }
+  .text-body {
+    font-size: 1rem;
+    line-height: 1.55;
+    font-weight: 400;
+  }
+  .text-body-sm {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+  .text-caption {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    font-weight: 500;
+  }
+  .text-micro {
+    font-size: 0.6875rem;
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* Signature font, used only in signature modal preview */
+  .font-signature {
+    font-family: var(--font-signature);
+    font-weight: 400;
+  }
+}

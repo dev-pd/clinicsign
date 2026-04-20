@@ -1,0 +1,21 @@
+{
+  "name": "clinicsign-infra",
+  "version": "0.1.0",
+  "description": "Pulumi infrastructure for ClinicSign",
+  "main": "src/index.ts",
+  "scripts": {
+    "preview": "pulumi preview",
+    "up": "pulumi up",
+    "destroy": "pulumi destroy",
+    "outputs": "pulumi stack output --show-secrets"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^6.0.0",
+    "@pulumi/pulumi": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "private": true
+}

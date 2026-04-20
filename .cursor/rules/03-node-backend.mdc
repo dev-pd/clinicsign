@@ -1,0 +1,171 @@
+---
+description: Node.js, Express, and backend architecture standards
+globs: ["apps/api/**/*.ts"]
+alwaysApply: false
+---
+
+# Backend standards
+
+## Architecture layers
+
+The backend follows a strict layered architecture. Do not skip layers.
+
+1. **Routes** (`src/routes/*.routes.ts`): Express router definitions. Wire up middleware and point to controllers. No business logic.
+2. **Controllers** (`src/controllers/*.controller.ts`): Parse and validate the request, call the service, shape the response. No business logic, no Prisma calls. Always use `try/catch` and call `next(error)`.
+3. **Services** (`src/services/*.service.ts`): Business logic. Orchestrate repositories and external services. No direct Express types, no HTTP concepts, pure domain logic.
+4. **Repositories** (`src/repositories/*.repository.ts`): Prisma access lives ONLY here. Each repository handles one entity and exposes domain-oriented methods: `findById`, `findByClinic`, `createWithAudit`. No business rules, only data access.
+5. **Middleware** (`src/middleware/`): Cross-cutting concerns like auth, rate limiting, request ID, error handling.
+6. **Schemas** (`src/schemas/*.schemas.ts`): Zod validation schemas for request bodies, query params, and env variables.
+7. **Utils** (`src/utils/`): Pure helper functions with no side effects.
+8. **Config** (`src/config/`): Environment variables (validated with Zod), logger, constants.
+
+## Validation
+
+- Every endpoint validates its inputs with Zod. Define the schema in `src/schemas/`, import it into the controller.
+- Never touch `req.body`, `req.query`, or `req.params` directly without parsing through Zod first.
+- On validation failure, the error middleware returns `400 Bad Request` with a structured error listing each invalid field.
+- Share Zod schemas with the frontend via `packages/shared-types` where possible.
+
+## Errors
+
+- Define an `AppError` class in `src/utils/errors.ts` with `code: string`, `message: string`, `statusCode: number`, optional `details`.
+- Provide factory helpers: `notFound`, `badRequest`, `unauthorized`, `forbidden`, `conflict`, `internal`.
+- Services throw `AppError` with a specific code. Example: `throw notFound("DOCUMENT_NOT_FOUND", \`Document ${id} not found\`)`.
+- Controllers wrap calls in try-catch and forward errors: `.catch(next)`.
+- Global error middleware converts:
+  - `AppError` → structured JSON with status code
+  - `ZodError` → 400 with field-level details
+  - `Prisma.PrismaClientKnownRequestError` → mapped to appropriate HTTP status (P2002 unique violation → 409, P2025 record not found → 404)
+  - Unknown → 500 with a generic message, log the real error with stack trace
+
+## Logging
+
+- Use Pino configured in `src/config/logger.ts`. Pretty transport in dev, JSON in prod.
+- Every request gets a correlation ID in middleware, attached to the request as `req.id` and to the response as `X-Request-Id`.
+- Child logger per request: `req.log = logger.child({ requestId: req.id })`. All logs within that request include the ID.
+- Log levels:
+  - `info`: successful operations, state changes, lifecycle events
+  - `warn`: recoverable issues, deprecated paths, rate limit hits
+  - `error`: exceptions, failed operations
+  - `debug`: verbose dev-only info
+- Never log PHI, passwords, tokens, API keys, or any user credentials. When logging request bodies, redact sensitive fields.
+
+## Environment variables
+
+- All env access goes through `src/config/env.ts`. Never touch `process.env` anywhere else.
+- `env.ts` defines a Zod schema, parses `process.env`, and exports a typed `env` object. App crashes at startup if required vars are missing.
+- Required env vars: `NODE_ENV`, `PORT`, `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `AWS_REGION`, `S3_BUCKET_NAME`, `EMAIL_FROM`, `WEB_APP_URL`, `LOG_LEVEL`.
+- Commit `.env.example` with placeholder values. Never commit `.env`.
+
+## Security middleware
+
+Every Express app must include, in this order:
+1. `helmet()` with sensible defaults
+2. `cors()` with origin from env (not `*` in production)
+3. `express.json({ limit: "1mb" })` (larger for file upload routes only)
+4. Request ID middleware
+5. Request logging middleware
+6. Rate limiting (`express-rate-limit`)
+   - Global: 300 requests / 15 min / IP
+   - Auth endpoints: 5 requests / 15 min / IP on login and signup
+   - Signing endpoints: 60 requests / 15 min / IP
+
+## Authentication
+
+- **Provider auth: Clerk**. Do NOT build custom auth. Do NOT issue JWTs for providers. Do NOT hash passwords.
+- Use `@clerk/express` middleware to verify Clerk-issued JWTs on every protected route. The middleware populates `req.auth` with the Clerk session, including `userId` (Clerk's user ID).
+- `user-sync.service.ts` ensures a local User row exists for every Clerk user. Called after Clerk auth middleware on first request per session. On User creation, also creates a Clinic.
+- Webhook endpoint `POST /api/webhooks/clerk` receives Clerk events (user.created, user.deleted). Verifies Svix signature before processing. Mounted BEFORE any auth middleware since webhooks don't carry auth headers.
+- Controllers access the local User + Clinic via a helper that looks up by `clerkUserId`, not the Clerk ID directly. This decouples our domain from Clerk.
+- **Patient auth (signing): signed JWT tokens, separate from Clerk**. Tokens are signed with `JWT_SIGNING_SECRET`, 7-day expiry, stored hashed in DB (sha256). Verify signature first, then look up by hash, then check status is not already SIGNED/EXPIRED/VOIDED. Single-use enforced by checking `signedAt` is null.
+- Never store patient tokens in plaintext. Never reuse the JWT_SIGNING_SECRET for anything else.
+
+## Controllers
+
+- Controllers are thin. Template:
+
+```ts
+export async function createDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const body = createDocumentSchema.parse(req.body);
+    const user = req.user; // set by auth middleware
+    const document = await documentsService.create(user.clinicId, user.id, body);
+    req.log.info({ documentId: document.id }, "document created");
+    return res.status(201).json({ data: document });
+  } catch (error) {
+    return next(error);
+  }
+}
+```
+
+- Always explicit return. Always try-catch. Always next(error) on failure. Always structured response wrapper.
+
+## Services
+
+- Services expose domain operations: `create`, `findByClinic`, `send`, `void`, `resend`.
+- Services accept primitive inputs and return domain objects. No Express types.
+- Services call repositories and other services. Do not call Prisma directly.
+- Transactions when multiple writes must succeed together. Pass the transaction client down.
+- Services are where audit logs are written. Every state change creates an audit entry.
+
+## Repositories
+
+- One repository per entity (User, Document, DocumentRecipient, AuditLog).
+- Methods named in domain terms: `findByEmail`, `findPendingByClinic`, not `findOne(where)`.
+- Accept optional transaction client as last parameter: `create(data, tx?: PrismaTransaction)`.
+- Return Prisma entities or domain objects, never raw rows.
+- Index any field used in frequent `where` clauses (already in schema, verify on new queries).
+
+## API response shape
+
+All successful responses:
+```json
+{ "data": <result> }
+```
+or for collections:
+```json
+{ "data": [<items>], "pagination": { "page": 1, "limit": 20, "total": 142 } }
+```
+
+All error responses:
+```json
+{ "error": { "code": "DOCUMENT_NOT_FOUND", "message": "Document with id xxx not found", "details": {} } }
+```
+
+## File uploads
+
+- `multer` with memory storage for file uploads.
+- Limits: 10 MB max size, PDF MIME type only, one file per request.
+- Validate file signature (magic bytes), not just MIME type (MIME can be spoofed).
+- After upload, stream to S3 immediately. Do not persist to local disk.
+
+## External services
+
+- All external service calls (S3, SES, etc.) go through service wrappers in `src/services/`, not direct SDK calls in controllers or other services.
+- Service wrappers handle retries, timeouts, and error mapping.
+- Use AWS SDK v3 (`@aws-sdk/client-s3`, `@aws-sdk/client-ses`). Never v2.
+- Configure SDK clients once in `src/config/` and reuse.
+
+## Graceful shutdown
+
+- Listen for `SIGTERM` and `SIGINT`.
+- Stop accepting new connections.
+- Drain in-flight requests with a timeout (30s).
+- Close database connections.
+- Exit with code 0.
+
+## Things never do in backend
+
+- Never access `req.body` directly; always Zod parse first
+- Never throw raw `Error`; throw `AppError` with a code
+- Never `console.log`; use the logger
+- Never call Prisma outside a repository
+- Never put business logic in a controller
+- Never skip the try-catch around a controller body
+- Never log PHI, passwords, tokens
+- Never hardcode secrets
+- Never return raw error messages to clients (sanitize in the error middleware)

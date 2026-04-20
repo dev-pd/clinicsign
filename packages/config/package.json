@@ -1,0 +1,9 @@
+{
+  "name": "@clinicsign/config",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./tsconfig/*.json": "./tsconfig/*.json",
+    "./eslint/*": "./eslint/*.js"
+  }
+}

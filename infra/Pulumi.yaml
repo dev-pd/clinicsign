@@ -1,0 +1,7 @@
+name: clinicsign-infra
+description: ClinicSign HIPAA-aware AWS infrastructure (S3, KMS, IAM, SES)
+runtime:
+  name: nodejs
+  options:
+    packagemanager: npm
+main: src/index.ts

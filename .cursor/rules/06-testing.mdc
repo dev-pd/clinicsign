@@ -1,0 +1,116 @@
+---
+description: Testing standards for backend services and frontend components
+globs: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/tests/**"]
+alwaysApply: false
+---
+
+# Testing standards
+
+## Framework
+
+- **Backend**: Vitest. Fast, modern, works well with TypeScript. Configure in `apps/api/vitest.config.ts`.
+- **Frontend**: Vitest + React Testing Library + jsdom. End-to-end with Playwright (optional, stretch goal).
+
+## What to test
+
+For this take-home, priority order:
+
+1. **Service layer** (backend business logic): the highest ROI. Test signup, login, document creation, send, sign, expire. Mock repositories and external services at the service boundary.
+2. **Utilities**: JWT signing/verification, password hashing, signing token generation, PDF overlay logic. Pure functions are easy to test and catch the most bugs.
+3. **API integration tests**: hit the endpoints with supertest, assert on status codes and response shapes. One happy path and one error path per endpoint is enough.
+4. **React components** (optional): only for components with non-trivial logic. Skip presentational components.
+5. **E2E** (stretch): Playwright scripts for the three critical flows: signup+login, create+send document, patient sign.
+
+## File layout
+
+- Test files next to source, same name with `.test.ts`: `auth.service.ts` → `auth.service.test.ts`.
+- Or in a `tests/` subfolder mirroring the src tree: `src/services/auth.service.ts` → `tests/services/auth.service.test.ts`.
+- Integration tests in `tests/integration/` with their own setup and teardown.
+- Pick one pattern, stay consistent.
+
+## Test structure
+
+- Use `describe` / `it` (not `test`) for consistency.
+- `describe` names the unit under test: `describe("authService.signup", ...)`.
+- `it` names the scenario: `it("creates a user and clinic when email is unique", ...)`.
+- Arrange, Act, Assert structure inside each test. Blank line between sections for readability.
+
+```ts
+describe("authService.signup", () => {
+  it("creates a user and clinic when email is unique", async () => {
+    // Arrange
+    const input = validSignupInput();
+    userRepo.findByEmail.mockResolvedValue(null);
+
+    // Act
+    const result = await authService.signup(input);
+
+    // Assert
+    expect(result.user.email).toBe(input.email);
+    expect(result.accessToken).toBeDefined();
+    expect(userRepo.create).toHaveBeenCalledOnce();
+  });
+});
+```
+
+## Test data and fixtures
+
+- Factory functions per entity: `validSignupInput()`, `makeUser(overrides)`, `makeDocument(overrides)`. Live in `tests/fixtures/`.
+- Every factory returns a fresh object with sensible defaults. Accept overrides for fields under test.
+- Never hardcode IDs across tests. Use `crypto.randomUUID()` or faker.
+- Never use real email addresses, real patient data, or real phone numbers in tests.
+
+## Mocking
+
+- Mock at the boundary: repositories, S3, SES, email services. Do not mock Prisma directly.
+- Use Vitest's `vi.fn()`, `vi.mock()` for module-level mocking.
+- Reset mocks between tests: `beforeEach(() => vi.clearAllMocks())`.
+- Do not mock what you own unless there's a reason. Test services against real pure functions.
+
+## Integration tests
+
+- Use a separate test database. Spin up a Postgres container in CI or use a named schema.
+- Run migrations before the test suite, truncate tables between tests (faster than re-migrating).
+- Use supertest against the Express app for API tests:
+
+```ts
+import request from "supertest";
+import { app } from "@/app";
+
+it("POST /api/auth/signup returns 201 and a token", async () => {
+  const response = await request(app)
+    .post("/api/auth/signup")
+    .send(validSignupInput());
+  expect(response.status).toBe(201);
+  expect(response.body.data.accessToken).toBeDefined();
+});
+```
+
+- Test the happy path + one validation failure + one authorization failure per endpoint.
+
+## Assertions
+
+- Use `expect(x).toBe(y)` for primitives, `toEqual` for objects, `toMatchObject` for partial matches.
+- Prefer specific matchers: `toHaveLength`, `toContain`, `toThrow`.
+- Avoid snapshot tests for anything that changes often (error messages, timestamps). Use them for stable structures only.
+
+## Async tests
+
+- Always `await` async operations. Never return a promise from an `it` callback without awaiting.
+- Use `expect(fn).rejects.toThrow()` for async error assertions, not try-catch in test bodies.
+
+## Coverage
+
+- Aim for 70%+ coverage on the service layer and utilities. No need to chase 100% on trivial code.
+- Coverage config in `vitest.config.ts` with `coverage.exclude` for types-only files, config files, generated code.
+- Do not gate on coverage percentage. Gate on tests existing for critical paths.
+
+## Things never do in tests
+
+- Never test implementation details (private methods, internal state). Test behavior through the public API.
+- Never commit `describe.only` or `it.only`. Lint should flag these.
+- Never leave `console.log` in tests. Use assertions.
+- Never hit real external services. Mock S3, SES, Stripe, Twilio, anything external.
+- Never share mutable state between tests. Each test is independent.
+- Never test that a mock was called with exact implementation details. Test outcomes.
+- Never write a test that sometimes passes and sometimes fails. Flaky tests erode trust more than no tests.

@@ -1,0 +1,200 @@
+---
+description: ClinicSign project-specific context and conventions. Always applied.
+alwaysApply: true
+---
+
+# ClinicSign project context
+
+## What this is
+
+ClinicSign is a HIPAA-aware document signing platform for small to medium medical practices. Providers sign in with Google via Clerk, upload a PDF, place signature and text fields on it, send it to a patient via email, and the patient signs in their browser without needing to create an account.
+
+This is a 2-day work trial submission. The goal is to demonstrate senior-level engineering quality: clean architecture, production-minded code, thoughtful tradeoffs, clear documentation.
+
+## Build phases
+
+**Phase 1 is the priority**. Do not start Phase 2 until Phase 1 is working end-to-end, deployed, and demoable.
+
+### Phase 1 - Core signing app (must ship)
+
+- Clerk-based authentication with Google OAuth
+- Provider dashboard listing documents with status
+- Upload PDF, place signature/text/date/checkbox/initial fields visually
+- Send to single recipient via email with signed magic link
+- Patient signing flow without account creation
+- Signed PDF generation via pdf-lib
+- Audit log
+- Document states: DRAFT to SENT to VIEWED to SIGNED (or EXPIRED or VOIDED)
+- Resend and void actions
+
+### Phase 2 - AI differentiators (stretch, only if Phase 1 is solid)
+
+- Auto-detect fields on PDF upload using Claude vision
+- Plain-language summary generated for each sent document, shown to patient before signing
+- Optional: chat with document on signing page
+
+Treat Phase 2 as a decoration on a working app. The core must stand on its own.
+
+## Tech stack (locked)
+
+Do not substitute these without discussion:
+
+- Turborepo monorepo: apps/web (Next.js) + apps/api (Express)
+- TypeScript strict everywhere
+- Next.js 14 App Router, Tailwind, shadcn/ui, React Hook Form, Zod, TanStack Query
+- Node.js, Express, Zod, Pino, Prisma
+- PostgreSQL via Prisma
+- Clerk for authentication (providers sign in with Google)
+- Anthropic Claude Sonnet 4.6 for AI features (Phase 2 only)
+- AWS S3 for file storage
+- Resend for email in dev, AWS SES for prod
+- LocalStack for local S3 emulation
+- Vitest for testing
+- Docker Compose for local dev
+- Deploy: Vercel (frontend) + AWS ECS Fargate (backend) + RDS + S3
+
+## Auth approach
+
+**Clerk is the auth provider.** Do not build custom auth, do not hash passwords, do not issue JWTs for providers.
+
+- Frontend: `@clerk/nextjs` with `<ClerkProvider>` in root layout
+- Backend: `@clerk/express` middleware verifies Clerk-issued JWT on each request
+- Webhook: `POST /api/webhooks/clerk` handles `user.created` events to sync User + Clinic rows into our DB
+- Our User row stores `clerkUserId` as a foreign reference
+- On signup, auto-create a Clinic for the user (default name: `{name}'s Clinic`)
+
+**Patient auth is separate.** Patients do NOT use Clerk. They access documents via signed one-time-use JWT tokens sent in the signing email. Token is stored hashed in DB, verified on access, marked as used on signing.
+
+## Vertical slice scope
+
+Only these features are in scope. If anything else comes up, confirm before building.
+
+**In scope (Phase 1):**
+- Provider signin via Clerk Google OAuth
+- Provider dashboard listing documents with status
+- Upload a PDF, place signature/text/date/checkbox/initial fields visually
+- Send document to a single recipient via email with a signed magic link
+- Patient signing flow (no account, via magic link), typed or drawn signature
+- Signed PDF generated via pdf-lib, stored in S3
+- Audit log
+- Document states and transitions
+- Resend and void actions
+
+**In scope (Phase 2 - stretch):**
+- Auto-detect fields using Claude vision
+- Plain-language summary for patients
+- Optional chat with document
+
+**Out of scope (do NOT build):**
+- Building PDFs from scratch (upload only)
+- Multiple recipients with signing order
+- Document templates library
+- Payments
+- Real-time collaboration or comments
+- CRM integrations
+- SMS delivery
+- Custom branding per clinic
+- Mobile apps
+
+## Key domain terms
+
+- **Provider**: a user with a Clerk account belonging to a Clinic
+- **Clinic**: the organization a provider belongs to. Data is scoped to clinic
+- **Patient / Recipient**: the person receiving a document to sign. No account
+- **Document**: a PDF that has been uploaded and may be sent for signature
+- **Field**: a region on a PDF page where a recipient enters data (signature, text, date, etc.)
+- **Magic link**: a time-limited URL with a signed JWT granting a specific recipient access to sign a specific document
+- **Audit log**: append-only record of every meaningful action on a document
+
+## Design direction
+
+Medical, clean, calm. Not corporate sales-green, not clinical fluorescent. Think One Medical or Forward.
+
+- **Primary**: soft sage/teal, not bright
+- **Background**: warm off-white (never pure white)
+- **Text**: near-black, high contrast
+- **Font**: Inter or Geist Sans, base 16-17px (larger than typical SaaS)
+- **Spacing**: generous, 8pt grid
+- **Corners**: 8-12px border-radius
+- **Motion**: subtle fades and slides, nothing bouncy
+
+Patient pages must have larger tap targets, larger fonts, and one primary action per screen. Assume older users on phones.
+
+## Data model summary
+
+Full schema is in `PROJECT.md`. Key points:
+
+- `User` has `clerkUserId` as the join with Clerk
+- `Clinic` auto-created on first signup
+- `Document` has a status state machine: DRAFT -> SENT -> VIEWED -> SIGNED (with EXPIRED and VOIDED branches)
+- `DocumentField` stores field placement on a PDF
+- `DocumentRecipient` stores signing metadata including hashed token
+- `AuditLog` is append-only
+- Phase 2 additions: `Document.plainSummary`, `DocumentField.aiGenerated`
+
+## Folder structure (authoritative)
+
+```
+clinicsign/
+├── apps/
+│   ├── web/       (Next.js App Router + Clerk)
+│   └── api/       (Express + Prisma + Clerk backend verification)
+├── packages/
+│   ├── shared-types/
+│   └── config/
+├── docker-compose.yml
+├── turbo.json
+├── package.json
+├── PROJECT.md
+└── README.md
+```
+
+## Environment parity
+
+- Every developer should run three commands and have the full app: `npm install`, `docker-compose up`, `npm run dev`
+- LocalStack emulates S3 in dev so no AWS account needed to build
+- Clerk works identically in dev and prod (dev instance keys vs prod instance keys)
+- Prod config diverges only in env vars pointing at real AWS + Clerk prod instance
+
+## HIPAA stance
+
+This is not HIPAA-certified. It is HIPAA-architected. Acknowledge clearly in README.
+
+In place:
+- HIPAA-eligible AWS services only
+- Encryption at rest (S3 KMS, RDS storage encryption)
+- Encryption in transit (TLS 1.2+)
+- Signed single-use tokens for patient access
+- Append-only audit log
+- Least-privilege IAM
+- Rate limiting, helmet, CORS with specific origins
+- Secrets in env vars (Secrets Manager in prod)
+
+Not in place (would need for prod):
+- BAA with AWS and Clerk (or migration to self-hosted auth)
+- SOC 2 audit
+- Intrusion detection
+- Formal breach procedures
+- Employee HIPAA training
+
+## Deliverables
+
+At end of 2 days:
+1. Public GitHub repo (or invite them to private)
+2. Live demo URL
+3. Loom walkthrough (5 min)
+4. Complete README
+5. Clean git history with conventional commits
+6. 5-10 meaningful unit tests
+
+## Things never do in this project
+
+- Never build features outside the scope without asking
+- Never invent endpoints not in the API contract
+- Never add fields to the data model without updating PROJECT.md
+- Never introduce a new library without justifying it
+- Never skip the audit log on a state change
+- Never store PDFs in the database
+- Never expose raw S3 URLs; always presigned
+- Never start Phase 2 until Phase 1 is deployed and demoable
+- Never build custom auth; use Clerk

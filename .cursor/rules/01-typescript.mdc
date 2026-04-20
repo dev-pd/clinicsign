@@ -1,0 +1,72 @@
+---
+description: TypeScript standards for strict type safety and idiomatic patterns
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: false
+---
+
+# TypeScript standards
+
+## Strict mode
+
+- `strict: true` in every tsconfig.json. Also enable `noUncheckedIndexedAccess`, `noImplicitOverride`, `exactOptionalPropertyTypes`.
+- Never use `any`. Use `unknown` at boundaries and narrow with type guards.
+- Never use non-null assertion (`!`) to silence the compiler. If you genuinely know a value is non-null, narrow it explicitly with a check.
+- Never use `as` to cast between unrelated types. If you need a cast, your types are probably wrong.
+
+## Types vs interfaces
+
+- Prefer `type` aliases for unions, intersections, mapped types, and plain data shapes.
+- Use `interface` only when the shape must be extended or merged. React component props can be either, stay consistent within a file.
+- Name types in PascalCase. Boolean types get an `Is` or `Has` prefix: `IsActive`, `HasPermission`.
+
+## Functions and modules
+
+- All exported functions have explicit parameter types AND explicit return types. No implicit returns from public APIs.
+- Internal helper functions can rely on inference if the return type is obvious.
+- Prefer named exports. Default exports are fine for Next.js pages and layouts where the framework requires them.
+- Use `import type { Foo } from "./foo"` when importing types only. This keeps the runtime import graph clean.
+
+## Null, undefined, and optional
+
+- Prefer `undefined` over `null` for absent values in TypeScript code. Use `null` only when the database or an external API forces it.
+- Never return `T | null | undefined`. Pick one.
+- Use the nullish coalescing operator `??` when you want to distinguish between null/undefined and other falsy values.
+- Optional chaining `?.` is fine, but do not chain more than three levels. If you need to, your data shape is wrong.
+
+## Enums
+
+- Prefer string union types over TypeScript enums. `type Status = "DRAFT" | "SENT" | "SIGNED"` is better than `enum Status`.
+- Exception: Prisma enums are fine because Prisma generates them for the database.
+
+## Generics
+
+- Use generics when a function or type is genuinely parameterized. Do not add `<T>` for decoration.
+- Give type parameters meaningful names when a generic has more than one: `<TInput, TOutput>` not `<T, U>`.
+- Constrain generics with `extends` when there are requirements: `<T extends { id: string }>`.
+
+## Errors
+
+- Define an `AppError` class or equivalent with `code`, `message`, `statusCode`. Never throw raw `Error` from business logic.
+- Use typed error codes as string union types: `type ErrorCode = "NOT_FOUND" | "UNAUTHORIZED" | ...`.
+- Catch errors at module boundaries, not inside every function.
+
+## Shared types
+
+- Types shared between frontend and backend live in `packages/shared-types`. This includes API request/response shapes, Zod schemas, and domain enums.
+- Import shared types via the workspace alias: `import type { Document } from "@clinicsign/shared-types"`.
+- Never redefine a type on one side that already exists on the other.
+
+## Style
+
+- Use `const` by default. `let` only when reassignment is required. Never `var`.
+- Arrow functions for callbacks and inline functions. `function` keyword for top-level pure functions.
+- Trailing commas on multi-line literals.
+- Single quotes for strings, double quotes for JSX attributes, backticks only for template literals.
+- No semicolons OR semicolons, pick one and configure prettier. Stay consistent across the repo.
+
+## Utility patterns
+
+- Use `satisfies` for literal object types when you want both type checking AND type inference: `const config = { ... } satisfies Config`.
+- Use `ReadonlyArray<T>` or `readonly T[]` for function parameters that should not be mutated.
+- Use `Pick`, `Omit`, `Partial`, `Required` instead of duplicating type shapes.
+- Use `z.infer<typeof schema>` to derive TS types from Zod schemas. Do not duplicate.

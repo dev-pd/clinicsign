@@ -1,0 +1,110 @@
+---
+description: Next.js 14 App Router, React, and frontend UI standards
+globs: ["apps/web/**/*.ts", "apps/web/**/*.tsx"]
+alwaysApply: false
+---
+
+# Next.js and React standards
+
+## App Router conventions
+
+- All routes live under `apps/web/app/`. The legacy `pages/` directory must not be used.
+- Each route directory contains `page.tsx` for the route, optionally `layout.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`.
+- Route groups in parentheses, e.g. `(auth)`, `(dashboard)`, organize without affecting the URL.
+- Dynamic segments use `[param]`, catch-all uses `[...slug]`.
+
+## Server vs client components
+
+- Default to server components. Do not add `"use client"` unless you genuinely need interactivity, browser APIs, React state, or React hooks.
+- Fetch data in server components directly. Never use `useEffect` + `fetch` for data that the server can get.
+- Mark `"use client"` as specifically as possible. A large `page.tsx` being server, with a small `ClientWidget` being client, is better than marking the whole page client.
+- Client components can import server components as children, but not the other way around.
+
+## Data fetching
+
+- Server components: `async` function components that await data directly. Use try-catch for errors, let loading.tsx handle loading state.
+- Client components: use TanStack Query (`@tanstack/react-query`). Never fetch in `useEffect`.
+- API calls go through a central `apps/web/lib/api-client.ts` axios or fetch wrapper that handles the base URL, auth token, and error normalization.
+- Never put raw `fetch` calls scattered across components.
+
+## Components
+
+- File name kebab-case, component name PascalCase: `document-editor.tsx` exports `DocumentEditor`.
+- Props typed with an interface or type named `<ComponentName>Props`.
+- Explicit return type on components is optional for plain JSX, required when the component returns something non-trivial.
+- Components under 200 lines. Above that, extract subcomponents or hooks.
+- No business logic in components. Extract to custom hooks (`use-*.ts`) or services.
+
+## State management
+
+- Local UI state: `useState`, `useReducer`.
+- Cross-component state: lift up, use context, or Zustand for bigger stores.
+- Server state: TanStack Query. Never duplicate server state into local state.
+- Form state: React Hook Form, not local state.
+
+## Forms
+
+- Every form uses React Hook Form + Zod resolver (`@hookform/resolvers/zod`).
+- Zod schema imported from `packages/shared-types` when the schema is shared with the backend.
+- Never use uncontrolled inputs for forms that submit data.
+- Submit handler is async, shows loading state while pending, shows error and success via toast.
+- Disable submit button during pending state.
+
+## UI components
+
+- Use shadcn/ui components (`apps/web/components/ui/`). Do not build custom buttons, inputs, dialogs, cards, or tables from scratch.
+- Tailwind utility classes for all styling. No custom CSS files unless absolutely necessary.
+- Follow shadcn patterns: `Button` with variants, `Input` with controlled state, `Dialog` for modals.
+- Icons from `lucide-react`. Do not use emoji as icons.
+
+## Feedback and states
+
+- Every data-fetching page has:
+  - A skeleton loader via `loading.tsx` or inline skeleton components (not a raw spinner)
+  - An error state via `error.tsx` or inline error with a retry button
+  - An empty state with meaningful copy and a CTA, not "No data"
+- Use `sonner` for toasts on action success and failure.
+- Button pending states: disable the button and swap label to "Saving..." or similar.
+- Form errors: inline under each field plus toast on submit failure.
+
+## Accessibility
+
+- All form inputs have associated labels (not just placeholders).
+- Interactive elements have `aria-label` if their purpose is not clear from text content.
+- Keyboard navigation works: tab order logical, escape closes modals, enter submits forms.
+- Sufficient color contrast. Do not rely on color alone to convey meaning.
+- Use semantic HTML: `<button>` for buttons, `<a>` for links, `<nav>` for navigation.
+
+## Performance
+
+- Images via `next/image`, never raw `<img>`. Provide width, height, alt.
+- Dynamic imports for heavy components not needed on first paint: `const Heavy = dynamic(() => import("./heavy"))`.
+- Memoize expensive computations with `useMemo`, expensive callbacks with `useCallback`, but only when there is a measured problem. Do not prematurely optimize.
+- Keep client bundles small. If a library is only needed server-side, keep the import in a server component.
+
+## Routing and navigation
+
+- Use `Link` from `next/link` for client-side navigation, not `<a>`.
+- Use `useRouter` from `next/navigation` (not `next/router`) for programmatic navigation in client components.
+- Use absolute paths with the `@/` alias configured in tsconfig. Never `../../../components/foo`.
+
+## Metadata and SEO
+
+- Export `metadata` object from page.tsx or layout.tsx for title, description, Open Graph tags.
+- Use `generateMetadata` for dynamic metadata based on route params.
+- Set `robots`, `openGraph`, `twitter` as appropriate.
+
+## Mobile responsiveness
+
+- The patient signing page and the landing page MUST work perfectly on mobile (375px width minimum).
+- Provider-facing pages (dashboard, editor) must at least not break on mobile, but can be optimized for desktop.
+- Use Tailwind breakpoints consistently: `sm`, `md`, `lg`, `xl`. Mobile-first.
+
+## Things never do in Next.js / React
+
+- Never `useEffect` with `fetch` for data that should come from the server
+- Never `<img>` instead of `next/image`
+- Never access `window` or `document` without a `typeof window !== "undefined"` guard, or better, move to a client component
+- Never put secrets in `NEXT_PUBLIC_*` env vars (they are exposed to the browser)
+- Never import server-only code into a client component
+- Never `any` as a prop type

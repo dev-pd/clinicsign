@@ -1,0 +1,184 @@
+---
+description: Git discipline and pre-commit code quality checks. Always applied.
+alwaysApply: true
+---
+
+# Commit discipline
+
+This take-home will be reviewed by senior engineers who read your git history. Treat every commit like a code review. Commit hygiene is a signal of engineering maturity.
+
+## Before you commit, always
+
+Before every commit, do this checklist. If you generated code, review it. Cursor makes mistakes.
+
+1. **Look at every file you changed**. Run `git diff --staged` and read it. Every line. If there is anything you cannot explain, revert or fix it.
+
+2. **Check for stray comments**. Search for these patterns in your changes:
+   - `// TODO:` (unless genuinely intentional and tracked)
+   - `// FIXME:`
+   - `// HACK:`
+   - `// XXX:`
+   - `// your code here`
+   - `// rest of the code`
+   - `// implementation here`
+   - `// ...`
+   - `// example:` (if left over from generation)
+   - AI placeholder comments like `// Your implementation`
+   - Commented-out code blocks
+   
+   If you find any, resolve them. Either implement, remove, or convert to a real tracked TODO with a ticket reference.
+
+3. **Check for stray logs**. Search for `console.log`, `console.debug`, `console.info`. Remove them unless they are genuinely user-facing error messages (in which case use the logger).
+
+4. **Check for stray debugger statements**. No `debugger;` in committed code.
+
+5. **Check for hardcoded values**. Secrets, URLs, magic numbers, test data. Move them to env vars or constants.
+
+6. **Run the gates**:
+   - `npm run lint` passes
+   - `npm run typecheck` passes  
+   - `npm run test` passes (at minimum the tests related to your change)
+   - `npm run build` succeeds
+
+7. **No `any` types introduced**. Grep for `: any` and `as any` in your diff.
+
+8. **No `.only` or `.skip` in tests**. Grep for `it.only`, `describe.only`, `it.skip`.
+
+9. **No unused imports or variables**. The linter catches these but verify.
+
+10. **README updated** if the change affects setup, env vars, or behavior users need to know.
+
+## Commit messages
+
+Use Conventional Commits. Format:
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+Types:
+- `feat`: new feature
+- `fix`: bug fix
+- `docs`: documentation only
+- `style`: formatting, whitespace, no logic change
+- `refactor`: code change with no feature or fix
+- `perf`: performance improvement
+- `test`: adding or fixing tests
+- `chore`: tooling, dependencies, config
+- `build`: build system or external dependencies
+- `ci`: CI configuration
+
+Scope is optional: `feat(api):`, `feat(web):`, `chore(deps):`.
+
+Subject:
+- Imperative mood: "add login endpoint", not "added login endpoint"
+- Lowercase (except proper nouns)
+- No period at the end
+- Under 72 characters
+
+Body (optional, for non-trivial commits):
+- Explain WHY, not what. The diff shows what.
+- Wrap at 72 characters.
+- Reference issues or design docs.
+
+Examples of good commit messages:
+
+```
+feat(api): add jwt authentication with refresh tokens
+
+Implements provider signup and login flow with bcrypt password hashing
+and JWT access + refresh token pattern. Refresh tokens are hashed in
+the database for revocation support.
+
+Closes #12
+```
+
+```
+fix(web): prevent double-submit on document send
+
+The send button was not disabled during the async call, allowing users
+to trigger duplicate sends.
+```
+
+```
+chore: add turborepo caching for lint and typecheck
+```
+
+Examples of bad commit messages:
+
+- `update` (zero information)
+- `fix stuff` (what stuff)
+- `WIP` (do not commit WIP to main)
+- `asdf` (no)
+- `Added a new file for the auth service and also fixed a bug in the router` (two things in one commit)
+
+## Commit size and scope
+
+- One logical change per commit. If you can describe the commit with "and", it should probably be two commits.
+- Do not mix formatting and logic changes. Run prettier in a separate commit if needed.
+- Do not mix refactors with new features. First refactor (commit), then add the feature (commit).
+- Smaller commits are better than larger commits. 10 lines with clear intent beats 1000 lines with mixed intent.
+
+## Branches
+
+- Work on a feature branch, not main: `feat/auth-flow`, `fix/document-upload-size`.
+- Rebase on main before merging, not merge commits.
+- Push early, push often. A dead laptop should not lose a day of work.
+
+## Before pushing
+
+- Squash cleanup: if you have commits like "fix typo", "fix typo again", "oops", squash them with interactive rebase.
+- Verify the history reads well: `git log --oneline`. Each commit should tell a story.
+- Do not rewrite history on a branch others are working on.
+
+## Pre-commit automation (set up on day one)
+
+Install Husky + lint-staged:
+
+```bash
+npm install --save-dev husky lint-staged
+npx husky init
+```
+
+`.husky/pre-commit`:
+```bash
+npx lint-staged
+npm run typecheck
+```
+
+`package.json`:
+```json
+{
+  "lint-staged": {
+    "*.{ts,tsx}": ["eslint --fix --max-warnings=0", "prettier --write"],
+    "*.{json,md,yml}": ["prettier --write"]
+  }
+}
+```
+
+This automates most of the checklist. You still need to review your diff manually.
+
+## Pre-push hook (optional but recommended)
+
+`.husky/pre-push`:
+```bash
+npm run test
+```
+
+Slower but catches broken pushes.
+
+## Things never do
+
+- Never commit directly to main without a PR (except on personal projects where you are the reviewer and even then, prefer PRs for take-homes)
+- Never `git push --force` to a shared branch
+- Never commit broken code with "will fix later"
+- Never commit generated code without reviewing it
+- Never commit `.env`, secrets, or credentials
+- Never commit large binaries; use Git LFS or S3
+- Never commit `node_modules`, `dist`, `.next`, or other build artifacts
+- Never commit half-working code with `console.log` left in
+- Never write a commit message you would be embarrassed to show a reviewer

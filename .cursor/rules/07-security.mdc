@@ -1,0 +1,144 @@
+---
+description: Security standards for a HIPAA-aware healthcare application. Always applied.
+alwaysApply: true
+---
+
+# Security standards
+
+This application handles Protected Health Information (PHI). Security is non-negotiable. Even a demo-stage app must be architected as if real PHI were flowing through it.
+
+## Authentication
+
+- **Provider auth is handled by Clerk.** Do not build custom password hashing, JWT issuance, or session management for providers. Clerk handles these correctly.
+- Configure Clerk to enforce reasonable password policy if email/password is enabled. For this app we rely on Google OAuth.
+- Session expiry: configure in Clerk dashboard. 30 min inactivity timeout is reasonable for healthcare.
+- Backend verifies every request via `@clerk/express` middleware. If Clerk verification fails, reject with 401 immediately.
+- Clerk webhooks: always verify Svix signature on incoming webhooks using CLERK_WEBHOOK_SECRET. An unsigned webhook is an attacker.
+- Clerk considerations for production: upgrade to HIPAA BAA tier. Document this tradeoff in README.
+- **Patient auth**: signed JWT tokens separate from Clerk. Sign with JWT_SIGNING_SECRET (min 256 bits of entropy, generate with `openssl rand -base64 32`). Hash token in DB (sha256). Single-use: check signedAt is null before accepting. 7-day expiry.
+- Never store raw patient tokens anywhere. Never reuse the JWT_SIGNING_SECRET for other purposes.
+
+## Authorization
+
+- Every protected endpoint uses the auth middleware. No route should forget it.
+- Authorization checks happen in the service layer: verify the authenticated user's `clinicId` matches the resource's `clinicId` before any read or write.
+- Never trust client-supplied `userId`, `clinicId`, or role. Always read from the decoded JWT on the server.
+- Principle of least privilege: a provider can only see their own clinic's documents. Even within a clinic, consider who can delete vs only read.
+
+## Input validation
+
+- Every API boundary validates inputs with Zod. This is non-negotiable.
+- Validate at the controller before calling the service. Reject with 400 on failure.
+- For file uploads: validate MIME type AND magic bytes (file signature). Limit file size in multer config.
+- Sanitize strings that end up in HTML (emails rendered in the UI, document titles). Use a library like DOMPurify if rendering user HTML (do not render user HTML if avoidable).
+- Never trust client-side validation. It is a UX nicety; the server must re-validate everything.
+
+## SQL injection
+
+- Use Prisma's query builder. Do not write raw SQL unless you must. If you must, use parameterized queries via `prisma.$queryRaw` with tagged templates, never string concatenation.
+- `prisma.$queryRawUnsafe` is almost always a code smell. If you use it, a senior engineer should explain why in a code comment.
+
+## XSS
+
+- Never use `dangerouslySetInnerHTML` with user content. If you must render rich text from users, sanitize with DOMPurify first.
+- Rely on React's default escaping for user content in JSX.
+- Set `Content-Security-Policy` header via Helmet. Start strict: `default-src 'self'`, relax only what you must.
+
+## CSRF
+
+- For cookie-based auth, implement CSRF tokens. For JWT in Authorization header, CSRF is mitigated by the fact that browsers do not auto-send custom headers cross-origin.
+- Configure CORS with specific origins. Never `Access-Control-Allow-Origin: *` when credentials are sent.
+
+## Secrets management
+
+- Never commit secrets. Ever.
+- Use `.env` locally (gitignored), Secrets Manager in prod.
+- `.env.example` in git with placeholder values and comments explaining each variable.
+- Rotate secrets on any suspected compromise. Include a runbook in `docs/` for rotation.
+- Use strong randomness for secrets: `openssl rand -base64 32` or equivalent. Not `password123`.
+
+## Logging
+
+- Never log PHI. That includes patient names, emails in some contexts, medical record numbers, diagnosis info, anything from patient-submitted forms.
+- Never log passwords, tokens, API keys, or secrets.
+- Redact sensitive fields from request body logs: `password`, `token`, `signature`, `ssn`.
+- Audit log is SEPARATE from application log. Audit log captures who did what when. It goes to the database, not to CloudWatch (PHI in logs is a compliance issue).
+
+## Rate limiting
+
+- Apply globally with `express-rate-limit`. Stricter on auth and signing endpoints.
+- Auth endpoints: 5 requests per 15 minutes per IP to prevent brute force.
+- Signing endpoints: 60 per 15 minutes per IP.
+- Consider CAPTCHAs on public endpoints if abuse is a real concern (post-MVP).
+
+## Headers
+
+- `Helmet` middleware on the API. Sets a sensible default of security headers.
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HSTS) on prod.
+- `X-Content-Type-Options: nosniff`.
+- `X-Frame-Options: DENY` to prevent clickjacking.
+- `Referrer-Policy: strict-origin-when-cross-origin`.
+
+## HTTPS
+
+- All production traffic over TLS 1.2+. Redirect HTTP to HTTPS at the ALB.
+- Internal service-to-service traffic also over TLS.
+- Pin TLS cipher suites to modern ones. AWS ALB policies handle this.
+
+## File storage
+
+- PHI in S3 is encrypted at rest with KMS customer-managed keys.
+- Access via short-lived presigned URLs. Never make objects public.
+- Bucket policy denies any action without the KMS encryption header on PUT.
+- Versioning and MFA delete enabled on PHI buckets in prod.
+
+## Database
+
+- RDS storage encryption enabled. Cannot be added after creation.
+- RDS in private subnets. No public access.
+- Backups encrypted. Retained per HIPAA requirements in prod.
+- TLS required for all connections: `rds.force_ssl = 1`.
+
+## Dependencies
+
+- Run `npm audit` regularly. Address high and critical vulnerabilities before merging.
+- Use `npm ci` in CI and production to ensure lockfile integrity.
+- Review new dependencies before adding. Prefer well-maintained, widely-used libraries.
+- Keep dependencies up to date. Dependabot or Renovate for alerts.
+
+## Error responses
+
+- Never return stack traces, raw database errors, or internal details to clients in production.
+- Generic error messages on 500: "An unexpected error occurred. Please try again."
+- Specific user-facing messages on 4xx where appropriate: "Email already in use", "Document not found".
+- Log the full error internally with the request ID so it can be traced.
+
+## Data minimization
+
+- Only collect the PHI strictly necessary for the function.
+- Only display the PHI strictly necessary in any given view.
+- Consider what goes in URLs (query params): avoid PHI in URLs because URLs end up in logs, browser history, referrer headers.
+
+## Session handling
+
+- Sessions expire after a period of inactivity (30 min reasonable for healthcare).
+- Log out on all tabs when user logs out on one tab (use storage events or a shared BroadcastChannel).
+- Clear sensitive state on logout: tokens, user info, cached data.
+
+## Breach response
+
+- Have a documented runbook for a suspected breach: rotate all secrets, revoke all tokens, force password reset, notify per HIPAA breach notification rule.
+- Not required for a demo, but mention in the README that this runbook would exist in production.
+
+## Things to never do
+
+- Never log PHI, passwords, tokens
+- Never store plaintext passwords
+- Never trust client input without validation
+- Never make S3 buckets public
+- Never use `*` in CORS or IAM with credentials
+- Never expose stack traces to clients
+- Never commit secrets
+- Never roll your own crypto
+- Never send PHI via unencrypted email
+- Never include PHI in URLs or referrer-sensitive places

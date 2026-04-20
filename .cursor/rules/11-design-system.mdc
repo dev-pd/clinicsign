@@ -1,0 +1,224 @@
+---
+description: Design system, visual consistency, and UI/UX standards. Always applied to web files.
+globs: ["apps/web/**/*.tsx", "apps/web/**/*.ts", "apps/web/**/*.css"]
+alwaysApply: false
+---
+
+# Design system enforcement
+
+Before generating any UI code, consult `apps/web/DESIGN_SYSTEM.md` at the root of the web app. Every color, font size, radius, shadow, spacing value, and motion curve has a defined token. Never invent new ones.
+
+## The only-tokens rule
+
+- **Never** hardcode colors in components. Use `bg-primary`, `text-foreground`, `border-border`. Never `bg-[#5A9B8E]`, never `text-green-500`, never inline `style={{color: "..."}}`
+- **Never** hardcode border radius values. Use `rounded-sm`, `rounded`, `rounded-md`, `rounded-lg`. Never `rounded-[7px]`
+- **Never** hardcode shadow values. Use `shadow-sm`, `shadow`, `shadow-md`, `shadow-lg`
+- **Never** hardcode font sizes. Use the semantic utility classes: `text-display`, `text-h1`, `text-h2`, `text-h3`, `text-h4`, `text-body-lg`, `text-body`, `text-body-sm`, `text-caption`, `text-micro`. Never `text-[19px]`
+- **Never** use the arbitrary value syntax `[...]` for design tokens. If you need a value that doesn't exist, add it to `globals.css` and `DESIGN_SYSTEM.md` first
+- Exception: layout dimensions (widths, heights, positioning) may use explicit values like `w-[240px]` when they represent structural layout not theme
+
+## Colors
+
+Only use the semantic palette. Do not reach for raw Tailwind color classes like `bg-blue-500` or `text-gray-700`.
+
+Semantic tokens available:
+- Surfaces: `bg-background`, `bg-card`, `bg-popover`, `bg-muted`, `bg-secondary`, `bg-accent`, `bg-sidebar`
+- Text: `text-foreground`, `text-muted-foreground`, `text-card-foreground`, `text-popover-foreground`
+- Brand: `bg-primary`, `text-primary`, `text-primary-foreground`
+- Status: `bg-success`, `bg-warning`, `bg-destructive`, `bg-info` (each with matching `-foreground`)
+- Borders: `border-border`, `border-input`
+- Focus: `ring-ring`
+
+If you need a faded/transparent version, use the `/` opacity syntax on a token: `bg-primary/10`, `text-destructive/60`. Never `bg-[rgba(...)]`.
+
+## Typography hierarchy rules
+
+- Every page has exactly one `text-display` OR one `text-h1` at the top. Not both. Landing page uses `text-display`, internal pages use `text-h1`
+- Section headers within a page are `text-h2`
+- Card/subsection headers are `text-h3` or `text-h4`
+- Body text uses `text-body` by default, `text-body-lg` in patient-facing flows, `text-body-sm` in dense tables and helper text
+- Uppercase labels use `text-micro` (already has tracking and font-weight applied). Use sparingly
+- Never skip levels in the hierarchy. If you have h1 then h3 with nothing between, reconsider
+
+## Buttons
+
+- Use the shadcn `Button` component for every button. Never build a custom one with raw `<button>` unless accessibility requires it
+- Use `variant="default"` for the primary action on a view
+- `variant="secondary"` for secondary actions
+- `variant="ghost"` for tertiary in toolbars
+- `variant="destructive"` only for delete/void, never for "Cancel" buttons
+- **Every view has at most ONE primary button**. If you find yourself adding a second `variant="default"`, one of them must become secondary
+- Button sizes: `size="default"` for most, `size="lg"` for landing-page CTAs and patient-facing primary, `size="sm"` for inline table actions, `size="icon"` for square icon buttons
+
+## Inputs
+
+- Every input has a visible `<Label>`. Placeholder is not a replacement for a label
+- Error messages appear below the input in `text-destructive text-body-sm`
+- Helper text appears below the input in `text-muted-foreground text-body-sm`
+- For patient-facing forms (`data-audience="patient"`), use `className="h-12 text-body-lg"` on inputs for larger touch targets and text
+
+## Cards
+
+- Use shadcn `Card` + `CardHeader` + `CardContent` + `CardFooter` composition
+- Cards use `rounded-lg`, not `rounded-md` or `rounded`
+- Card shadow: `shadow-sm` default. Elevated cards (feature cards on landing) use `shadow`. Modals use `shadow-md`
+- Card padding: `p-6` default, `p-8` for feature cards, `p-4` for compact list items
+
+## Status indicators
+
+- **Always** use the `StatusBadge` component for document status. Never build a custom badge with inline colors
+- Import: `import { StatusBadge } from "@/components/ui/status-badge"`
+- It handles all 6 statuses with the correct color mapping from the design system
+
+## Empty states
+
+- **Always** use the `EmptyState` component when a list, table, or feed has no data
+- Import: `import { EmptyState } from "@/components/ui/empty-state"`
+- Provide icon, title, description, and an action. No exceptions
+
+## Loading states
+
+- Use `<Skeleton>` from shadcn, shaped like the content being loaded
+- A dashboard loading state is skeleton cards matching the real card layout
+- A table loading state is skeleton rows
+- NEVER a centered spinner as the primary loading state on a full page
+- Button loading: disable the button, swap label, show `<Loader2 className="h-4 w-4 animate-spin mr-2" />`
+- Use Next.js `loading.tsx` convention for route-level loading
+
+## Icons
+
+- `lucide-react` only. Never another icon library
+- Default stroke width: 1.5 (`strokeWidth={1.5}` prop). Matches the calm aesthetic; the lucide default of 2 feels too heavy for medical
+- Size: `h-4 w-4` in buttons (16px), `h-5 w-5` inline with text (20px), `h-6 w-6` standalone (24px), `h-7 w-7` or larger in empty states
+- Color: default to `currentColor` (no class needed), use `text-muted-foreground` for secondary icons
+- Always `aria-hidden="true"` on decorative icons. If the icon conveys meaning, it needs an `aria-label` on the parent interactive element
+
+## Interactive state completeness
+
+Every interactive element must have ALL FOUR states defined. If any is missing, the element feels "dead" and unprofessional:
+
+1. **Default**: base appearance
+2. **Hover**: cursor enters (use `hover:` prefix)
+3. **Focus**: keyboard focus (handled by `focus-visible:ring-2 ring-ring` utility)
+4. **Active**: mouse pressed or touch down (`active:scale-[0.98]` for buttons)
+5. **Disabled**: non-interactive state with `opacity-50 cursor-not-allowed`, and `aria-disabled="true"`
+
+shadcn components handle this by default. When you build a custom interactive element, match the same pattern.
+
+## Dialog and modal rules
+
+- Use shadcn `Dialog`. Never use `alert()`, `confirm()`, or `prompt()`. Ever.
+- Every dialog must have THREE ways to close: X button in corner, click outside the dialog, Escape key
+- Never trap the user. There is always an explicit escape route
+- Confirmation dialogs for destructive actions (void, delete) use `AlertDialog`, not `Dialog`, which prevents accidental outside-click dismissal
+- Confirmation button in destructive dialogs: `variant="destructive"` and always requires explicit click, never defaults to focused on render
+
+## Form validation timing
+
+- Validate on blur for individual fields (show error when user leaves the field)
+- Validate again on submit (catch fields never visited)
+- Never validate on every keystroke (jarring for users)
+- Error message appears below the field in `text-destructive text-body-sm`, never as a toast for inline form errors
+- Use toasts only for submission-level errors ("We couldn't save your changes"), not per-field errors
+
+## Scrollable areas
+
+- Never hide scrollbars on content that extends beyond the viewport
+- Use `overflow-auto` not `overflow-hidden` when content might overflow
+- For custom scroll areas, use shadcn `ScrollArea` which provides visible scrollbars with consistent styling
+- Tables on mobile: horizontal scroll with visible indicators, never break layout by wrapping cell content awkwardly
+
+## Images and media
+
+- `next/image` always, never raw `<img>`
+- Always provide `width` and `height` (or `fill` with a sized parent) to prevent layout shift
+- Always provide meaningful `alt` text. Empty `alt=""` only for truly decorative images
+- No auto-playing video or gifs in UI chrome
+
+## Motion
+
+- Import animation presets from `@/lib/motion`. Never inline framer-motion variants unless you genuinely need a one-off
+- Use `fadeIn` for simple appearances, `fadeInUp` for dialogs and cards, `slideInRight` for toasts/side panels, `staggerContainer` + `staggerItem` for lists
+- Button press animation: `whileTap={buttonTap}` from `@/lib/motion`
+- For the patient signing page, use `fieldPulse` on currently-active signature fields
+- Always wrap motion configs with the reduced-motion helper if user preference should apply
+
+## Spacing
+
+- Use Tailwind's spacing scale (multiples of 4px). Prefer multiples of 8 for vertical rhythm: `gap-2`, `gap-4`, `gap-6`, `gap-8`, `gap-12`
+- Between related elements within a group: `gap-2` to `gap-3`
+- Between groups: `gap-4` to `gap-6`
+- Between sections: `gap-8` to `gap-12`
+- Page padding: `px-6` mobile, `px-12` desktop. Or use a container pattern
+- Card padding: `p-6` default
+
+## Page structure rules
+
+Every full page has this structure:
+
+```tsx
+export default function Page() {
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-h1">Page title</h1>
+          <p className="text-body text-muted-foreground mt-1">Optional subtitle</p>
+        </div>
+        <div>{/* Primary action button */}</div>
+      </div>
+      <div>{/* Main content */}</div>
+    </div>
+  );
+}
+```
+
+Consistency in page structure is half of "looking like a real app."
+
+## Patient-facing rules (critical)
+
+The patient signing page must:
+- Set `data-audience="patient"` on the root element of the page to inherit the larger base font and tap target rules
+- Have ONLY ONE primary action visible at a time
+- Hide all dashboard navigation; this is a focused task flow
+- Minimum 17px body text
+- Minimum 44x44px tap targets (the CSS in globals.css enforces this via the data attribute)
+- Progress indicator always visible
+- No marketing, no upsells, no newsletter, no "download our app"
+- Warm confirmation on completion with animated checkmark
+
+## Voice and copy
+
+- Sentence case: "Create document", not "Create Document"
+- Active voice: "We'll email Maria", not "Maria will be emailed"
+- Human errors: "We couldn't send this document. Check the email address and try again", not "ERROR: 422"
+- No exclamation points in neutral UI. Save for genuine celebration (signing complete)
+- Patient-facing copy explains WHY the user is doing something
+
+## Accessibility requirements
+
+These are enforced, not suggestions:
+
+- Contrast 4.5:1 for body text, 3:1 for large text
+- Every form input has `<Label>` element, not just placeholder
+- Every icon-only button has `aria-label`
+- Every image has `alt` text (empty `alt=""` for decorative only)
+- Keyboard navigation works on every interactive element
+- Focus rings are visible and never removed (`outline-none` is forbidden on interactive elements unless replaced with a visible `ring` utility)
+- Color is never the only way to communicate meaning (status badges have dots AND text)
+- `prefers-reduced-motion` respected (CSS handles this globally)
+
+## Things never do
+
+- Never hardcode hex, rgb, or HSL colors in components
+- Never use `text-gray-600`, `bg-blue-500`, or other raw Tailwind colors. Use semantic tokens only
+- Never use `style={{}}` for things that have a Tailwind class
+- Never use `!important`. Ever
+- Never remove focus outlines without replacing them
+- Never use emojis as functional icons (OK in content)
+- Never build custom versions of shadcn components that already exist
+- Never add fonts not listed in the design system
+- Never use `animate-bounce`, `animate-ping`, or other attention-grabbing animations
+- Never use `<img>` instead of `next/image`
+- Never skip the loading state
+- Never skip the empty state
