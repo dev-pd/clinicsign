@@ -235,7 +235,10 @@ export function DocumentPdfEditor({
     },
   });
 
-  const pageWidth = Math.min(900, containerWidth);
+  // -40 leaves room for the scroll wrapper's padding (24) + its vertical
+  // scrollbar (~16). Without this the page renders wider than the wrapper's
+  // content area and triggers horizontal scrolling inside the preview.
+  const pageWidth = Math.max(280, Math.min(900, containerWidth - 40));
 
   const addField = useCallback((type: ApiFieldType, page: number, nx: number, ny: number) => {
     const { width: w, height: h } = FIELD_DEFAULTS[type];
@@ -465,6 +468,14 @@ export function DocumentPdfEditor({
       ) : null}
 
       {pdfUrl && !pdfLoadError && workerReady ? (
+        <div
+          className="bg-muted/30 border-border max-h-[min(80vh,900px)] overflow-y-auto overscroll-contain rounded-md border p-3"
+          aria-label={
+            numPages > 1
+              ? `PDF preview, ${numPages} pages — scroll to see more`
+              : "PDF preview"
+          }
+        >
         <Document
           file={pdfUrl}
           loading={
@@ -548,6 +559,7 @@ export function DocumentPdfEditor({
               })
             : null}
         </Document>
+        </div>
       ) : !pdfLoadError ? (
         <div className="text-body text-muted-foreground flex items-center gap-2 py-8">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden />

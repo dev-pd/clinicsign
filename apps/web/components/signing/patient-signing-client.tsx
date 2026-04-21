@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { Calendar, Check, CheckCircle2, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import * as React from "react";
 import SignaturePad from "signature_pad";
@@ -54,6 +54,93 @@ function isValidToken(t: string): boolean {
   return /^[a-f0-9]{64}$/i.test(t);
 }
 
+/**
+ * What the field overlay shows on top of the PDF.
+ * - Empty: type label + "*" if required (low-emphasis prompt to act).
+ * - Filled: the actual value the patient entered, sized to fit the box.
+ *
+ * Image signatures are rendered with object-contain so the stroke fills the
+ * box without distortion. Text-based fields use leading-tight + truncate so
+ * very long values stay inside the cell.
+ */
+function FieldOverlayContent({
+  type,
+  required,
+  value,
+}: {
+  type: ApiFieldType;
+  required: boolean;
+  value: string;
+}): React.ReactElement {
+  const empty = type === "CHECKBOX" ? value !== "true" : value.trim() === "";
+
+  if (empty) {
+    return (
+      <span className="pointer-events-none flex w-full items-center gap-1 truncate px-1.5 text-caption font-medium leading-none">
+        {type === "DATE" ? (
+          <Calendar className="h-3 w-3 shrink-0" aria-hidden strokeWidth={2} />
+        ) : null}
+        <span className="truncate">
+          {FIELD_LABEL[type]}
+          {required ? " *" : ""}
+        </span>
+      </span>
+    );
+  }
+
+  if (type === "CHECKBOX") {
+    return (
+      <span className="pointer-events-none flex h-full w-full items-center justify-center">
+        <Check className="h-full w-full p-0.5" aria-hidden strokeWidth={3} />
+      </span>
+    );
+  }
+
+  if (type === "SIGNATURE" && value.startsWith("data:image")) {
+    // eslint-disable-next-line @next/next/no-img-element -- data URL, no domain to allowlist
+    return (
+      <img
+        src={value}
+        alt="Your signature"
+        className="pointer-events-none h-full w-full object-contain"
+      />
+    );
+  }
+
+  if (type === "DATE") {
+    let label = value;
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      label = parsed.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    }
+    return (
+      <span className="pointer-events-none flex w-full items-center gap-1 px-1.5 text-body-sm leading-none">
+        <Calendar className="h-3 w-3 shrink-0" aria-hidden strokeWidth={2} />
+        <span className="truncate">{label}</span>
+      </span>
+    );
+  }
+
+  // TEXT, INITIAL, typed SIGNATURE — render the value directly.
+  const isTypedSignature = type === "SIGNATURE";
+  return (
+    <span
+      className={cn(
+        "pointer-events-none w-full truncate px-1.5 leading-none",
+        isTypedSignature
+          ? "text-body italic"
+          : "text-body-sm"
+      )}
+    >
+      {value}
+    </span>
+  );
+}
+
 type PatientSigningClientProps = {
   token: string;
 };
@@ -104,11 +191,15 @@ export function PatientSigningClient({
     if (!el) {
       return;
     }
-    const ro = new ResizeObserver(() => {
-      setPageWidth(Math.max(280, el.clientWidth));
-    });
+    // -40 leaves room for the scroll wrapper's padding (24) + its vertical
+    // scrollbar (~16). Without this the PDF page renders wider than the
+    // wrapper's content area and triggers horizontal scrolling.
+    const measure = (): void => {
+      setPageWidth(Math.max(280, el.clientWidth - 40));
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setPageWidth(Math.max(280, el.clientWidth));
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -133,30 +224,54 @@ export function PatientSigningClient({
     [activeFieldId, viewQuery.data?.fields]
   );
 
+  // Mount SignaturePad after the dialog has actually painted. Two reasons:
+  //   1. Radix Dialog uses a portal; the canvas isn't in the DOM on the
+  //      same tick we set `activeFieldId`. A rAF gives it one paint to mount.
+  //   2. signature_pad's pointer/mouse listeners attach during construction.
+  //      If they attach before the canvas has measurable CSS dimensions, the
+  //      coordinate math collapses to (0,0) and strokes look like nothing
+  //      happened. Measuring after rAF guarantees `clientWidth > 0`.
+  // We also honor devicePixelRatio so strokes are crisp on retina screens
+  // and the pen actually lands where the user touches.
   React.useEffect(() => {
-    if (!activeField || activeField.type !== "SIGNATURE") {
-      sigPadRef.current = null;
+    if (!activeField || activeField.type !== "SIGNATURE" || sigTab !== "draw") {
       return;
     }
-    if (sigTab !== "draw") {
-      return;
-    }
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    const w = 440;
-    const h = 180;
-    canvas.width = w;
-    canvas.height = h;
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
-    const pad = new SignaturePad(canvas, {
-      backgroundColor: "rgb(255, 255, 255)",
-      penColor: "rgb(17, 24, 39)",
+
+    let cancelled = false;
+    let pad: SignaturePad | null = null;
+
+    const raf = window.requestAnimationFrame(() => {
+      if (cancelled) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const cssWidth = canvas.clientWidth || 440;
+      const cssHeight = 180;
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+
+      canvas.width = Math.floor(cssWidth * ratio);
+      canvas.height = Math.floor(cssHeight * ratio);
+      canvas.style.height = `${cssHeight}px`;
+
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.scale(ratio, ratio);
+      }
+
+      pad = new SignaturePad(canvas, {
+        backgroundColor: "rgb(255, 255, 255)",
+        penColor: "rgb(17, 24, 39)",
+        minWidth: 0.6,
+        maxWidth: 2.2,
+      });
+      sigPadRef.current = pad;
     });
-    sigPadRef.current = pad;
+
     return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+      pad?.off();
       sigPadRef.current = null;
     };
   }, [activeField, sigTab]);
@@ -384,7 +499,15 @@ export function PatientSigningClient({
 
           <Card className="overflow-hidden shadow-sm">
             <CardContent className="pt-6">
-              <div ref={containerRef} className="w-full">
+              <div
+                ref={containerRef}
+                className="bg-muted/30 border-border max-h-[min(80vh,900px)] w-full overflow-y-auto overscroll-contain rounded-md border p-3"
+                aria-label={
+                  numPages > 1
+                    ? `Document, ${numPages} pages — scroll to see more`
+                    : "Document"
+                }
+              >
               {!workerReady ? (
                 <div className="text-body-lg text-muted-foreground flex items-center gap-2 py-12">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -428,20 +551,26 @@ export function PatientSigningClient({
                           {view.fields
                             .filter((f) => f.page === pageNumber)
                             .map((field) => {
-                              const filled = Boolean(
-                                (values[field.id] ?? "").trim() ||
-                                  (field.type === "CHECKBOX" && values[field.id] === "true")
-                              );
+                              const raw = values[field.id] ?? "";
+                              const filled =
+                                field.type === "CHECKBOX"
+                                  ? raw === "true"
+                                  : raw.trim().length > 0;
                               return (
                                 <button
                                   key={field.id}
                                   type="button"
-                                  className={cn(
-                                    "absolute flex items-start border-2 p-1 text-left text-caption transition-colors",
+                                  aria-label={
                                     filled
-                                      ? "border-success/70 bg-success/10 text-success"
-                                      : "border-primary/50 bg-primary/5 text-primary",
-                                    field.type === "CHECKBOX" ? "cursor-pointer" : "cursor-pointer"
+                                      ? `${FIELD_LABEL[field.type]} — change`
+                                      : `Add ${FIELD_LABEL[field.type]}`
+                                  }
+                                  className={cn(
+                                    "absolute flex items-center overflow-hidden border-2 transition-colors",
+                                    filled
+                                      ? "border-success/70 bg-success/5 text-success"
+                                      : "border-primary/60 bg-primary/5 text-primary hover:bg-primary/10",
+                                    "cursor-pointer"
                                   )}
                                   style={{
                                     left: `${field.x * 100}%`,
@@ -452,27 +581,27 @@ export function PatientSigningClient({
                                   onClick={() => {
                                     if (field.type === "CHECKBOX") {
                                       toggleCheckbox(field.id);
-                                    } else {
-                                      const current = values[field.id] ?? "";
-                                      if (field.type === "SIGNATURE") {
-                                        setTypedSig(
-                                          current.startsWith("data:image")
-                                            ? ""
-                                            : current
-                                        );
-                                        setSigTab("draw");
-                                      } else {
-                                        setDraftText(current);
-                                      }
-                                      setActiveFieldId(field.id);
+                                      return;
                                     }
+                                    const current = values[field.id] ?? "";
+                                    if (field.type === "SIGNATURE") {
+                                      setTypedSig(
+                                        current.startsWith("data:image")
+                                          ? ""
+                                          : current
+                                      );
+                                      setSigTab("draw");
+                                    } else {
+                                      setDraftText(current);
+                                    }
+                                    setActiveFieldId(field.id);
                                   }}
                                 >
-                                  <span className="pointer-events-none truncate">
-                                    {FIELD_LABEL[field.type]}
-                                    {field.required ? " *" : ""}
-                                    {filled ? " · done" : ""}
-                                  </span>
+                                  <FieldOverlayContent
+                                    type={field.type}
+                                    required={field.required}
+                                    value={raw}
+                                  />
                                 </button>
                               );
                             })}
@@ -550,10 +679,13 @@ export function PatientSigningClient({
                   <p className="text-body-sm text-muted-foreground mb-2">
                     Sign in the box below with your finger or mouse.
                   </p>
-                  <canvas
-                    ref={canvasRef}
-                    className="touch-none w-full max-w-full rounded-md border border-border bg-white"
-                  />
+                  <div className="border-border bg-white relative w-full overflow-hidden rounded-md border">
+                    <canvas
+                      ref={canvasRef}
+                      style={{ width: "100%", height: "180px", display: "block" }}
+                      className="touch-none"
+                    />
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
