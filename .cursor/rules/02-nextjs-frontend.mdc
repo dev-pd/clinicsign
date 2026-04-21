@@ -1,5 +1,5 @@
 ---
-description: Next.js 14 App Router, React, and frontend UI standards
+description: Next.js 16 App Router, React 19, and frontend UI standards
 globs: ["apps/web/**/*.ts", "apps/web/**/*.tsx"]
 alwaysApply: false
 ---

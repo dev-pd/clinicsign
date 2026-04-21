@@ -112,7 +112,7 @@ These will be called out in README as future work:
 | Layer | Choice | Why |
 |---|---|---|
 | Repo | Turborepo monorepo | Shared types, one-command setup |
-| Frontend | Next.js 14 App Router + TypeScript | Modern, typed, fast |
+| Frontend | Next.js 16 App Router + TypeScript | Modern, typed, fast |
 | UI | Tailwind + shadcn/ui | Professional look, accessible |
 | Forms | React Hook Form + Zod | Type-safe validation |
 | Server state | TanStack Query | Caching, loading states |
@@ -333,7 +333,7 @@ clinicsign/
 │   │   │   │   │   └── [id]/page.tsx
 │   │   │   ├── sign/[token]/page.tsx
 │   │   │   ├── layout.tsx (wraps with ClerkProvider)
-│   │   │   └── middleware.ts (Clerk middleware for protected routes)
+│   │   │   └── proxy.ts (Clerk `clerkMiddleware` for protected routes; Next.js 16 convention)
 │   │   ├── components/
 │   │   │   ├── ui/ (shadcn)
 │   │   │   ├── document-editor/
@@ -407,7 +407,7 @@ clinicsign/
 - Set up a webhook endpoint that receives `user.created` from Clerk to create a User + Clinic in our DB
 - The Clerk user ID is stored on our User row as `clerkUserId` - this is our join key
 - For this MVP: each new Clerk user gets their own Clinic automatically (Clinic name defaults to user's name + "'s Clinic", editable in settings)
-- Middleware at `apps/web/middleware.ts` protects dashboard routes
+- Proxy at `apps/web/proxy.ts` (Next.js 16 naming; Clerk `clerkMiddleware`) protects dashboard routes
 - Public routes: landing, sign-in, sign-up, /sign/:token
 - Clerk provides `<SignIn />`, `<SignUp />`, `<UserButton />` components - use them, don't build custom
 

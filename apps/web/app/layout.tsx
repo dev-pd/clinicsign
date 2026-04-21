@@ -20,12 +20,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="en" className={fonts} suppressHydrationWarning>
-        <body className="min-h-screen bg-background antialiased">
+    <html lang="en" className={fonts} suppressHydrationWarning>
+      <body className="min-h-screen bg-background antialiased">
+        <ClerkProvider>
           <AppProviders>{children}</AppProviders>
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }

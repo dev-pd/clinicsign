@@ -4,6 +4,7 @@ import type {
   ApiDocument,
   DocumentDetailResponse,
   DocumentsListResponse,
+  PatchDocumentFieldInput,
   PresignedUrlResponse,
 } from "./api-types.js";
 
@@ -112,6 +113,25 @@ export async function sendDocument(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(input),
+    }
+  );
+  return parseApiJson<DocumentDetailResponse>(res);
+}
+
+export async function patchDocument(
+  token: string | null,
+  documentId: string,
+  body: { title?: string; fields?: PatchDocumentFieldInput[] }
+): Promise<DocumentDetailResponse> {
+  const res = await fetch(
+    `${getBrowserApiBaseUrl()}/api/documents/${documentId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
     }
   );
   return parseApiJson<DocumentDetailResponse>(res);

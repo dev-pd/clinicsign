@@ -41,7 +41,7 @@ Do not substitute these without discussion:
 
 - Turborepo monorepo: apps/web (Next.js) + apps/api (Express)
 - TypeScript strict everywhere
-- Next.js 14 App Router, Tailwind, shadcn/ui, React Hook Form, Zod, TanStack Query
+- Next.js 16 App Router, React 19, Tailwind, shadcn/ui, React Hook Form, Zod, TanStack Query
 - Node.js, Express, Zod, Pino, Prisma
 - PostgreSQL via Prisma
 - Clerk for authentication (providers sign in with Google)

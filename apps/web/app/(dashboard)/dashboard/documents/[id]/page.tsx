@@ -1,9 +1,12 @@
 import { DocumentDetailView } from "@/components/dashboard/document-detail-view";
 
 type PageProps = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
-export default function DocumentDetailPage({ params }: PageProps): JSX.Element {
-  return <DocumentDetailView documentId={params.id} />;
+export default async function DocumentDetailPage({
+  params,
+}: PageProps): Promise<JSX.Element> {
+  const { id } = await params;
+  return <DocumentDetailView documentId={id} />;
 }

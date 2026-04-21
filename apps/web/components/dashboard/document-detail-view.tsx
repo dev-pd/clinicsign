@@ -3,9 +3,16 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import dynamic from "next/dynamic";
+import {
+  Component,
+  type ErrorInfo,
+  type ReactNode,
+  useMemo,
+  useState,
+} from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -19,6 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +45,55 @@ import {
   resendDocument,
   sendDocument,
 } from "@/lib/api-client";
+
+/** Prevents a thrown pdf.js / react-pdf error from blanking the whole dashboard shell. */
+class PdfShellErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+
+  componentDidCatch(_error: Error, _info: ErrorInfo): void {}
+
+  render(): ReactNode {
+    if (this.state.error) {
+      return (
+        <div
+          className="text-body-sm rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-destructive"
+          role="alert"
+        >
+          <p className="font-medium">PDF viewer failed to load</p>
+          <p className="mt-2 text-muted-foreground">{this.state.error.message}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const DocumentPdfEditor = dynamic(
+  () => import("@/components/dashboard/document-pdf-editor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4 py-2" aria-busy="true">
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-9 w-20" />
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-24" />
+        </div>
+        <Skeleton className="aspect-[8.5/11] w-full max-w-2xl rounded-lg" />
+      </div>
+    ),
+  }
+);
 
 const sendSchema = z.object({
   recipientName: z.string().min(1, "Name is required.").max(200),
@@ -120,12 +177,58 @@ export function DocumentDetailView({
     }
   }
 
+  const docForEditorKey = detailQuery.data?.document;
+  const pdfEditorKey = useMemo(
+    () =>
+      docForEditorKey
+        ? `${docForEditorKey.id}:${JSON.stringify(docForEditorKey.fields)}`
+        : documentId,
+    [docForEditorKey, documentId]
+  );
+
   if (!isLoaded || detailQuery.isPending) {
     return (
       <DashboardShell>
-        <div className="text-body text-muted-foreground flex items-center gap-2 py-12">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading document…
+        <div className="flex flex-col gap-8">
+          <Skeleton className="h-8 w-40" />
+          <div className="space-y-2">
+            <Skeleton className="h-9 max-w-md" />
+            <Skeleton className="h-5 w-56" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-10 w-44" />
+          </div>
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <Skeleton className="h-6 w-28" />
+                <Skeleton className="h-4 w-full max-w-sm" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="aspect-[8.5/11] w-full max-w-2xl rounded-lg" />
+              </CardContent>
+            </Card>
+            <aside className="flex flex-col gap-4">
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <Skeleton className="h-6 w-24" />
+                  <Skeleton className="h-4 w-full" />
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </CardContent>
+              </Card>
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-4 w-full" />
+                </CardHeader>
+              </Card>
+            </aside>
+          </div>
         </div>
       </DashboardShell>
     );
@@ -224,49 +327,76 @@ export function DocumentDetailView({
           ) : null}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Recipient</CardTitle>
-            <CardDescription>
-              {recipient
-                ? "Who receives the signing link."
-                : "No recipient yet — send the document to add one."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-body space-y-1">
-            {recipient ? (
-              <>
-                <p>
-                  <span className="text-muted-foreground">Name: </span>
-                  {recipient.name}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Email: </span>
-                  {recipient.email}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Signed: </span>
-                  {recipient.signedAt
-                    ? new Date(recipient.signedAt).toLocaleString()
-                    : "—"}
-                </p>
-              </>
-            ) : (
-              <p className="text-muted-foreground">—</p>
-            )}
-          </CardContent>
-        </Card>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <div className="min-w-0 space-y-4">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Preview</CardTitle>
+                <CardDescription>
+                  {doc.status === "DRAFT"
+                    ? "Place fields on the PDF, then save. Drag to move fields in Select mode."
+                    : "Fields are locked after send. Download PDFs from the actions above."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PdfShellErrorBoundary key={pdfEditorKey}>
+                  <DocumentPdfEditor
+                    documentId={documentId}
+                    readOnly={doc.status !== "DRAFT"}
+                    fields={doc.fields}
+                    updatedAt={doc.updatedAt}
+                  />
+                </PdfShellErrorBoundary>
+              </CardContent>
+            </Card>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Fields</CardTitle>
-            <CardDescription>
-              {doc.fields.length === 0
-                ? "No fields placed yet. Field placement is coming in a later step."
-                : `${doc.fields.length} field(s) on this document.`}
-            </CardDescription>
-          </CardHeader>
-        </Card>
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Recipient</CardTitle>
+                <CardDescription>
+                  {recipient
+                    ? "Who receives the signing link."
+                    : "No recipient yet — send the document to add one."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="text-body space-y-1">
+                {recipient ? (
+                  <>
+                    <p>
+                      <span className="text-muted-foreground">Name: </span>
+                      {recipient.name}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Email: </span>
+                      {recipient.email}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Signed: </span>
+                      {recipient.signedAt
+                        ? new Date(recipient.signedAt).toLocaleString()
+                        : "—"}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">—</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Fields</CardTitle>
+                <CardDescription>
+                  {doc.fields.length === 0
+                    ? "No fields placed yet. Field placement is coming in a later step."
+                    : `${doc.fields.length} field(s) on this document.`}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </aside>
+        </div>
 
         <Dialog open={sendOpen} onOpenChange={setSendOpen}>
           <DialogContent>

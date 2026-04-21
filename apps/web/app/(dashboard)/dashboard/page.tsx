@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 
-import { DocumentsListSection } from "@/components/dashboard/documents-list-section";
+import { DocumentsCommandCenter } from "@/components/dashboard/documents-command-center";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getServerApiBaseUrl } from "@/lib/server-api";
@@ -26,18 +26,12 @@ export default async function DashboardPage(): Promise<JSX.Element> {
     const data = (await res.json()) as MeResponse;
     return (
       <DashboardShell>
-        <div className="space-y-10">
-          <Card>
-            <CardHeader>
-              <CardTitle>Welcome, {data.user.name}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-body text-muted-foreground">
-              <p>{data.user.clinic.name}</p>
-              <p className="mt-2">{data.user.email}</p>
-            </CardContent>
-          </Card>
-          <DocumentsListSection />
-        </div>
+        <DocumentsCommandCenter
+          welcome={{
+            name: data.user.name,
+            clinic: data.user.clinic.name,
+          }}
+        />
       </DashboardShell>
     );
   }
@@ -45,7 +39,7 @@ export default async function DashboardPage(): Promise<JSX.Element> {
   if (res.status === 404) {
     return (
       <DashboardShell>
-        <Card className="border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/40">
+        <Card className="border-warning/40 bg-warning/10">
           <CardHeader>
             <CardTitle>Syncing your account</CardTitle>
           </CardHeader>

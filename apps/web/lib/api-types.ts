@@ -18,10 +18,31 @@ export type ApiDocument = {
   updatedAt: string;
 };
 
+/** Prisma FieldType enum values exposed by the API. */
+export type ApiFieldType =
+  | "SIGNATURE"
+  | "TEXT"
+  | "DATE"
+  | "CHECKBOX"
+  | "INITIAL";
+
+export type PatchDocumentFieldInput = {
+  type: ApiFieldType;
+  page: number;
+  /** Normalized 0–1 from left of page. */
+  x: number;
+  /** Normalized 0–1 from top of page. */
+  y: number;
+  width: number;
+  height: number;
+  required?: boolean;
+  recipientId?: string | null;
+};
+
 export type ApiDocumentField = {
   id: string;
   documentId: string;
-  type: string;
+  type: ApiFieldType;
   page: number;
   x: number;
   y: number;

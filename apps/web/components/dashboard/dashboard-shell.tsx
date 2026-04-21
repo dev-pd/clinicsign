@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { UserButton } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -31,7 +32,7 @@ function NavLink({
     <Link
       href={href}
       className={className}
-      onClick={(e) => {
+      onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
         if (pathname !== href) {
           return;
         }
@@ -94,7 +95,7 @@ export function DashboardShell({ children }: DashboardShellProps): JSX.Element {
         </div>
         <UserButton afterSignOutUrl="/" />
       </header>
-      <main className="mx-auto max-w-6xl p-4 md:p-8">{children}</main>
+      <main className="mx-auto max-w-7xl p-4 md:px-8 md:py-8">{children}</main>
     </div>
   );
 }
