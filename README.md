@@ -65,6 +65,30 @@ Sign up for these services (5 minutes):
 
 Put the keys in a local notes file. You'll need them in `.env.local` and `.env` files later.
 
+## Clerk webhook from localhost (tunnel)
+
+Clerk must call your API over **HTTPS** on the public internet. Your Express API runs at `http://localhost:4000`, so you expose it with a tunnel.
+
+**1. Start the API** (from the repo root: `npm run dev`, or run only `@clinicsign/api` so port **4000** is listening).
+
+**2. Start a tunnel** (second terminal), using **one** of:
+
+| Command | What you need |
+|--------|----------------|
+| `npm run tunnel:api` | **ngrok** on your PATH. On macOS: `brew install ngrok/ngrok/ngrok`. **First time only:** create a free account at [ngrok](https://dashboard.ngrok.com/signup), then run `ngrok config add-authtoken <token>` from [Your Authtoken](https://dashboard.ngrok.com/get-started/your-authtoken). |
+| `npm run tunnel:api:lt` | **No ngrok account.** Uses `localtunnel` (installed with the repo). Less reliable than ngrok; fine for quick tests. |
+
+**3. Copy the HTTPS URL** the tunnel prints (ngrok shows a `Forwarding` line like `https://abcd.ngrok-free.app`; localtunnel prints a `loca.lt` URL).
+
+**4. In Clerk** → **Configure** → **Webhooks** → **Add endpoint**:
+
+- URL: `https://<tunnel-host>/api/webhooks/clerk` (example: `https://abcd.ngrok-free.app/api/webhooks/clerk`)
+- Events: at least `user.created` (optional: `user.updated`, `user.deleted`)
+
+**5. Copy the endpoint Signing secret** (`whsec_…`) into your repo root **`.env`** as `CLERK_WEBHOOK_SECRET=`, then **restart the API**.
+
+**6. Test** by signing in at `http://localhost:3000` or sending a test event from the webhook page. If the tunnel URL changes (new ngrok session), update the endpoint URL in Clerk.
+
 ## Immediately after unzipping
 
 ```bash

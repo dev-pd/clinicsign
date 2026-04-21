@@ -2,7 +2,10 @@
   "name": "clinicsign",
   "private": true,
   "packageManager": "npm@10.9.2",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -15,9 +18,12 @@
     "docker:down": "docker compose down",
     "db:migrate": "turbo run db:migrate --filter=@clinicsign/api",
     "db:generate": "turbo run db:generate --filter=@clinicsign/api",
-    "db:seed": "npm run db:seed -w @clinicsign/api"
+    "db:seed": "npm run db:seed -w @clinicsign/api",
+    "tunnel:api": "ngrok http 4000",
+    "tunnel:api:lt": "localtunnel --port 4000"
   },
   "devDependencies": {
+    "localtunnel": "^2.0.2",
     "turbo": "^2.4.4",
     "typescript": "^5.7.3"
   }
