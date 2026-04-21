@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 
+import { DocumentsListSection } from "@/components/dashboard/documents-list-section";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getServerApiBaseUrl } from "@/lib/server-api";
@@ -25,15 +26,18 @@ export default async function DashboardPage(): Promise<JSX.Element> {
     const data = (await res.json()) as MeResponse;
     return (
       <DashboardShell>
-        <Card>
-          <CardHeader>
-            <CardTitle>Welcome, {data.user.name}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-body text-muted-foreground">
-            <p>{data.user.clinic.name}</p>
-            <p className="mt-2">{data.user.email}</p>
-          </CardContent>
-        </Card>
+        <div className="space-y-10">
+          <Card>
+            <CardHeader>
+              <CardTitle>Welcome, {data.user.name}</CardTitle>
+            </CardHeader>
+            <CardContent className="text-body text-muted-foreground">
+              <p>{data.user.clinic.name}</p>
+              <p className="mt-2">{data.user.email}</p>
+            </CardContent>
+          </Card>
+          <DocumentsListSection />
+        </div>
       </DashboardShell>
     );
   }

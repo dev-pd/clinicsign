@@ -4,6 +4,7 @@ import * as React from "react";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 
+import { QueryProvider } from "@/components/providers/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function AppProviders({
@@ -18,15 +19,17 @@ export function AppProviders({
       enableSystem={false}
       disableTransitionOnChange
     >
-      <TooltipProvider delayDuration={200}>
-        {children}
-        <Toaster
-          position="top-right"
-          richColors
-          closeButton
-          duration={6000}
-        />
-      </TooltipProvider>
+      <QueryProvider>
+        <TooltipProvider delayDuration={200}>
+          {children}
+          <Toaster
+            position="top-right"
+            richColors
+            closeButton
+            duration={6000}
+          />
+        </TooltipProvider>
+      </QueryProvider>
     </ThemeProvider>
   );
 }

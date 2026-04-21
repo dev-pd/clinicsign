@@ -5,6 +5,8 @@
  */
 
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +49,7 @@ export function EmptyState({
         <div className="mt-6">
           {action.href ? (
             <Button asChild>
-              <a href={action.href}>{action.label}</a>
+              <Link href={action.href}>{action.label}</Link>
             </Button>
           ) : (
             <Button onClick={action.onClick}>{action.label}</Button>
