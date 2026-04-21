@@ -167,7 +167,6 @@ export function PatientSigningClient({
   // (and the page rescales up) than too wide (which makes the canvas
   // overflow its wrapper and shifts field overlay coordinates).
   const [pageWidth, setPageWidth] = React.useState(320);
-  const [containerMeasured, setContainerMeasured] = React.useState(false);
   const [numPages, setNumPages] = React.useState(0);
   const [workerReady, setWorkerReady] = React.useState(false);
 
@@ -216,7 +215,6 @@ export function PatientSigningClient({
     const measure = (): void => {
       const width = Math.max(280, el.clientWidth - 40);
       setPageWidth(width);
-      setContainerMeasured(true);
     };
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -543,7 +541,7 @@ export function PatientSigningClient({
                     : "Document"
                 }
               >
-              {!workerReady || !containerMeasured ? (
+              {!workerReady ? (
                 <div className="text-body-lg text-muted-foreground flex items-center gap-2 py-12">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                   Loading PDF…

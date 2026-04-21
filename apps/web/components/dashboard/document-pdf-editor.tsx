@@ -212,7 +212,6 @@ export function DocumentPdfEditor({
   // wider than the wrapper, the wrapper's `inline-block max-w-full` would clamp
   // it and field overlay percentages would drift relative to the visible PDF.
   const [containerWidth, setContainerWidth] = useState(320);
-  const [containerMeasured, setContainerMeasured] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -256,7 +255,6 @@ export function DocumentPdfEditor({
     }
     const measure = (): void => {
       setContainerWidth(Math.max(280, el.clientWidth));
-      setContainerMeasured(true);
     };
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -626,7 +624,7 @@ export function DocumentPdfEditor({
         <p className="text-body text-destructive">{pdfLoadError}</p>
       ) : null}
 
-      {pdfUrl && !pdfLoadError && workerReady && containerMeasured ? (
+      {pdfUrl && !pdfLoadError && workerReady ? (
         <div
           className="bg-muted/30 border-border max-h-[min(80vh,900px)] overflow-y-auto overscroll-contain rounded-md border p-3"
           aria-label={
