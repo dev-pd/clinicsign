@@ -303,18 +303,29 @@
 /**
  * react-pdf canvas safety net.
  *
- * Field overlays on the PDF are positioned by % of the page-wrap div, which
- * is `inline-block max-w-full`. If the canvas inside ever renders wider than
- * the wrap (e.g. wrong pageWidth, race between resize observer and first
- * paint, viewport changes during scroll), the wrap clamps but the canvas
- * overflows — so overlays drift left of where they appear on the visible
- * canvas. This rule scales the canvas down to fit the wrap, keeping overlay
- * coordinates and visible canvas pixels in sync no matter what pageWidth
- * react-pdf was handed. The canvas is rendered at higher intrinsic
- * resolution than display, which is also good for retina.
+ * react-pdf sets `min-width: min-content` inline on the .react-pdf__Page div,
+ * which forces the Page (and its canvas) to be at least as wide as the canvas's
+ * intrinsic display size, regardless of any max-width we set on the wrapper.
+ * That's how field overlays end up drifting on phones: the canvas overflows
+ * the wrap, but overlays are positioned by % of the (clamped) wrap.
+ *
+ * Two-part fix:
+ *   1) Override the inline min-width so the Page div is allowed to shrink to
+ *      its parent.
+ *   2) Make the canvas responsive: width:100% replaces the inline pixel width
+ *      from react-pdf, and height:auto preserves aspect ratio from the canvas's
+ *      intrinsic width/height attributes (canvas is a replaced element).
+ *
+ * The intrinsic raster resolution stays whatever react-pdf set it to, so the
+ * canvas just gets visually scaled — good for retina, no quality loss.
  */
-.react-pdf__Page__canvas,
 .react-pdf__Page {
+  min-width: 0 !important;
   max-width: 100% !important;
+}
+
+.react-pdf__Page__canvas {
+  max-width: 100% !important;
+  width: 100% !important;
   height: auto !important;
 }
