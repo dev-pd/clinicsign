@@ -30,7 +30,7 @@ import {
   fetchSigningView,
 } from "@/lib/api-client";
 import type { ApiFieldType } from "@/lib/api-types";
-import "@/lib/pdf-worker";
+import { configurePdfJsWorker } from "@/lib/pdf-worker";
 import { cn } from "@/lib/utils";
 
 const Document = dynamic(
@@ -67,6 +67,7 @@ export function PatientSigningClient({
 
   const [pageWidth, setPageWidth] = React.useState(720);
   const [numPages, setNumPages] = React.useState(0);
+  const [workerReady, setWorkerReady] = React.useState(false);
 
   const [activeFieldId, setActiveFieldId] = React.useState<string | null>(null);
   const [sigTab, setSigTab] = React.useState<"type" | "draw">("draw");
@@ -109,6 +110,21 @@ export function PatientSigningClient({
     ro.observe(el);
     setPageWidth(Math.max(280, el.clientWidth));
     return () => ro.disconnect();
+  }, []);
+
+  // Configure the pdf.js worker lazily on the client. Keeping this out of
+  // module scope prevents pdfjs-dist's browser-only top-level code from
+  // executing during SSR, which otherwise 500s the `/sign/*` route.
+  React.useEffect(() => {
+    let cancelled = false;
+    void configurePdfJsWorker().then(() => {
+      if (!cancelled) {
+        setWorkerReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const activeField = React.useMemo(
@@ -320,6 +336,12 @@ export function PatientSigningClient({
           <Card className="overflow-hidden shadow-sm">
             <CardContent className="pt-6">
               <div ref={containerRef} className="w-full">
+              {!workerReady ? (
+                <div className="text-body-lg text-muted-foreground flex items-center gap-2 py-12">
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                  Loading PDF…
+                </div>
+              ) : (
               <Document
                 file={view.originalPdfUrl}
                 loading={
@@ -410,6 +432,7 @@ export function PatientSigningClient({
                     })
                   : null}
               </Document>
+              )}
               </div>
             </CardContent>
           </Card>
