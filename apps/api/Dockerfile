@@ -8,10 +8,8 @@
 #   docker run -p 4001:4000 clinicsign-api:local
 # Or: `npm run docker:api` (Compose exposes :4001 on the host)
 #
-# When Prisma exists under apps/api/prisma, add:
-#   RUN cd apps/api && npx prisma generate
-# before `npm run build`, copy `apps/api/prisma` into the runner stage, and run
-# `npx prisma migrate deploy` before starting Node (see PROJECT.md deployment section).
+# Prisma: `npm run build` runs `prisma generate`. Copy `apps/api/prisma` in the
+# runner image if you run `prisma migrate deploy` at container start (add prisma CLI to prod deps or use CI migrations).
 
 FROM node:20-alpine AS builder
 
@@ -43,6 +41,7 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=builder --chown=app:app /app/node_modules ./node_modules
 COPY --from=builder --chown=app:app /app/packages ./packages
 COPY --from=builder --chown=app:app /app/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=app:app /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder --chown=app:app /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder --chown=app:app /app/package.json ./package.json
 
