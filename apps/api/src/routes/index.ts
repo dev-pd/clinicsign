@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { documentsRouter } from "./documents.routes.js";
 import { meRouter } from "./me.js";
 
 /**
@@ -12,3 +13,4 @@ apiRouter.get("/health", (_req, res) => {
 });
 
 apiRouter.use("/me", meRouter);
+apiRouter.use("/documents", documentsRouter);

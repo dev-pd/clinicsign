@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { NextFunction, Request, Response } from "express";
 import type { Logger } from "pino";
+import multer from "multer";
 import { ZodError } from "zod";
 
 import { env } from "../config/env.js";
@@ -29,6 +30,18 @@ export function errorHandler(
     log.warn({ err, requestId }, err.message);
     res.status(err.statusCode).json({
       error: { code: err.code, message: err.message },
+    });
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    log.warn({ err, requestId }, "Multipart upload error");
+    const message =
+      err.code === "LIMIT_FILE_SIZE"
+        ? "File too large (max 25MB)."
+        : "File upload failed.";
+    res.status(400).json({
+      error: { code: "UPLOAD_ERROR", message },
     });
     return;
   }
