@@ -644,13 +644,6 @@ const taskDefinition = new aws.ecs.TaskDefinition(`clinicsign-api-task-${stack}`
               "awslogs-stream-prefix": "api",
             },
           },
-          healthCheck: {
-            command: ["CMD-SHELL", `curl -f http://localhost:${apiContainerPort}/health || exit 1`],
-            interval: 30,
-            timeout: 5,
-            retries: 3,
-            startPeriod: 20,
-          },
         },
       ])
     }),

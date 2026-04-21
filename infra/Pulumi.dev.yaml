@@ -5,6 +5,25 @@ config:
     # Set runtime config via:
     #   pulumi config set --path 'apiEnv.KEY' VALUE
     #   pulumi config set --secret --path 'apiEnvSecret.KEY' VALUE
-    WEB_APP_URL: http://localhost:3000
+    WEB_APP_URL: https://clinicsign-web.vercel.app
     NODE_ENV: production
     LOG_LEVEL: info
+    CLERK_PUBLISHABLE_KEY: pk_test_Y3VkZGx5LWphdmVsaW4tMTcuY2xlcmsuYWNjb3VudHMuZGV2JA
+    EMAIL_FROM: ClinicSign <onboarding@resend.dev>
+    S3_BUCKET_NAME: clinicsign-dev-docs-20260421123610433700000001
+    AWS_REGION: us-east-1
+  clinicsign-infra:apiEnvSecret:
+    CLERK_WEBHOOK_SECRET:
+      secure: AAABAA0iAoW4gkuoD4ts0zul9iZFMQu1Wv80K+tR8IGN7z73W94E/ptKFOi7KYZXkmToWi7UOqPx4z1w8MdlPcClS/H76g==
+    DATABASE_URL:
+      secure: AAABAFJD3Lfsd6cuVzKReqHmnCJ/Q60oIuvXp7rRenW9xpcYDgats2cP1ZsMdFkwJGtUxebNWrTyWXZi78lompQPLhhuFHFg7vt+gEf7SzEz4g19OoAgqN6Tpg/ttbSy5o7uxa6yBVEK4AbuSey8LZZz01Y8ODmw/7rPZlT+tDZ3hhRa7WImvRZumhie76JCLPpZGhjuZ4AJ1k9zw2TSw1moMYl4/cV/plgVpr+dejWU72Qm
+    CLERK_SECRET_KEY:
+      secure: AAABAHnF6iQHtqnU1npACx1atUf1e+s+AMcY7pMeqS3skbG7v3YxQSEjvPlcuDdvgqyxYlrOXDozP/4dHlMKBttUfI4k8nBDpCBCGp+qVuqvZA==
+    JWT_SIGNING_SECRET:
+      secure: AAABAHTGQspmLbw1F4h0qQkQJ3tDYux/Ulx5uODbanpBY6zIA97pypIBbqcHz4wtm5mnggcn9OyKWSG1OPS1THDqUsgsjAVxhEyRUvbCESJl/OnRoueJl4kVaOeRufsJ
+    AWS_ACCESS_KEY_ID:
+      secure: AAABAIYvwTXjU1TUKoBnepNKYANhlW/1DwftpeU/cVAn+jCNTTAhetdhtYOIe8ITYdNEng==
+    AWS_SECRET_ACCESS_KEY:
+      secure: AAABAOtf2GK/ajmmQktOwcw7BKRXdXr4dhoQ6AVkrHCB5LUbwK7HnRdGozatd5brQM+D2eo2PdondAJ+5zfPxkANLg3FtqiS
+    RESEND_API_KEY:
+      secure: AAABAIX0GVP+A7NgDYOyfb7JyPF9Yvlpm0+DvyDo8W3Gi+TswP8gCTuTPmdHUSQ6iMv0e0ftwcwPCCmOuG01NBz0Ll8=
