@@ -299,3 +299,22 @@
     font-weight: 400;
   }
 }
+
+/**
+ * react-pdf canvas safety net.
+ *
+ * Field overlays on the PDF are positioned by % of the page-wrap div, which
+ * is `inline-block max-w-full`. If the canvas inside ever renders wider than
+ * the wrap (e.g. wrong pageWidth, race between resize observer and first
+ * paint, viewport changes during scroll), the wrap clamps but the canvas
+ * overflows — so overlays drift left of where they appear on the visible
+ * canvas. This rule scales the canvas down to fit the wrap, keeping overlay
+ * coordinates and visible canvas pixels in sync no matter what pageWidth
+ * react-pdf was handed. The canvas is rendered at higher intrinsic
+ * resolution than display, which is also good for retina.
+ */
+.react-pdf__Page__canvas,
+.react-pdf__Page {
+  max-width: 100% !important;
+  height: auto !important;
+}
