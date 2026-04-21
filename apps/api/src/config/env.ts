@@ -4,8 +4,10 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const here = dirname(fileURLToPath(import.meta.url));
+// `here` is `apps/api/src/config` — optional overrides in `apps/api/.env`.
 config({ path: resolve(here, "../../.env") });
-config({ path: resolve(here, "../../../.env") });
+// Monorepo root `.env` (preferred for local dev).
+config({ path: resolve(here, "../../../../.env") });
 
 function normalizeProcessEnv(): NodeJS.ProcessEnv {
   const e: NodeJS.ProcessEnv = { ...process.env };
