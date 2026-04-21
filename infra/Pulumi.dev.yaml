@@ -1,2 +1,10 @@
 config:
   aws:region: us-east-1
+  clinicsign-infra:apiEnv:
+    # Non-secret defaults only. Do NOT commit real credentials in this file.
+    # Set runtime config via:
+    #   pulumi config set --path 'apiEnv.KEY' VALUE
+    #   pulumi config set --secret --path 'apiEnvSecret.KEY' VALUE
+    WEB_APP_URL: http://localhost:3000
+    NODE_ENV: production
+    LOG_LEVEL: info

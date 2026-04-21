@@ -11,7 +11,8 @@ export const completeSigningBodySchema = z.object({
   fieldValues: z.array(
     z.object({
       fieldId: z.string().uuid(),
-      value: z.string(),
+      /** Plain text or a data URL for drawn signatures (PNG/JPEG). */
+      value: z.string().max(6_000_000),
     })
   ),
 });

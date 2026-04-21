@@ -1,144 +1,71 @@
-# ClinicSign Starter Kit
+# ClinicSign
 
-Everything you need to build ClinicSign as a take-home work trial.
+HIPAA-aware document signing for small medical practices — Next.js + Express + Prisma + Clerk + AWS (RDS, S3) + Vercel for the web app.
 
-## How to use this
+## Quick start (local development)
 
-1. **Unzip this into an empty folder** that will become your repo
-2. **Initialize git**: `git init`
-3. **Open the folder in Cursor**
-4. **Follow `_setup/CURSOR_PROMPTS.md`** in order. It contains every Cursor prompt for Phase 1 and Phase 2.
+```bash
+git clone <your-repo-url> && cd clinicsign
+npm install
+```
 
-That's it. The files are already in the right place. Cursor reads them automatically.
+1. **AWS (required for API):** provision with Pulumi — see **`infra/README.md`** and **`infra/AWS_SETUP_GUIDE.md`**. Copy stack outputs into repo root **`.env`** (start from **`.env.example`**).
+2. **Clerk, Resend, etc.:** fill keys in **`.env`** and **`apps/web/.env.local`** per **`.env.example`** / **`apps/web/.env.example`**.
+3. **Database:** `npm run db:migrate` (from repo root; targets RDS via `DATABASE_URL`).
+4. **Run:** `npm run dev` (Turborepo: web + API).
 
-## What's in here
+Optional: run only the API container locally — **`npm run docker:api`** (Postgres/S3 still AWS; see **`docker-compose.yml`**).
+
+## Deployment (what we use)
+
+| Piece | Where |
+|--------|--------|
+| **Web** | **Vercel** — project root **`apps/web`**. |
+| **API** | **AWS** — container in **ECR**, run on **ECS Fargate** behind an **ALB** (wire after **`pulumi up`**; ECR + RDS + S3 come from Pulumi today — see **`infra/README.md`**). |
+| **Data** | **RDS PostgreSQL** + **S3** (+ **KMS**, **IAM** app user) via **`infra/`**. |
+
+There is **no** LocalStack and **no** Dockerized PostgreSQL for app data — the database is **RDS**.
+
+End-to-end checklist: **`infra/AWS_SETUP_GUIDE.md`**.
+
+## Repository layout
 
 ```
 clinicsign/
-├── .cursor/rules/              <- 12 rules, auto-loaded by Cursor
-│   ├── 00-core.mdc             always applied: engineering principles
-│   ├── 01-typescript.mdc       TS/TSX files
-│   ├── 02-nextjs-frontend.mdc  apps/web files
-│   ├── 03-node-backend.mdc     apps/api files
-│   ├── 04-prisma-database.mdc  Prisma and repositories
-│   ├── 05-aws-infra.mdc        Docker, AWS services
-│   ├── 06-testing.mdc          test files
-│   ├── 07-security.mdc         always applied: security
-│   ├── 08-commit-discipline.mdc always applied: git + pre-commit
-│   ├── 09-clinicsign-project.mdc always applied: project context
-│   ├── 10-ai-agent.mdc         AI service files (Phase 2)
-│   └── 11-design-system.mdc    apps/web UI files
-├── PROJECT.md                  spec: data model, API, flows
-├── apps/web/
-│   ├── DESIGN_SYSTEM.md        design tokens reference
-│   ├── app/globals.css         CSS variables (OKLCH color tokens)
-│   ├── lib/fonts.ts            next/font setup
-│   ├── lib/motion.ts           Framer Motion presets
-│   └── components/ui/
-│       ├── status-badge.tsx    reusable status pill
-│       └── empty-state.tsx     reusable empty state
-└── _setup/                     <- NOT part of your app, just instructions for you
-    ├── CURSOR_PROMPTS.md       run these in Cursor, one at a time
-    ├── CURSOR_USER_SETTINGS.md paste into Cursor settings, not the repo
-    └── pre-commit-hook.sh      Husky pre-commit hook
+├── .cursor/rules/           Cursor rules (TypeScript, Next, API, security, …)
+├── apps/
+│   ├── web/                 Next.js 16 App Router (Vercel)
+│   └── api/                 Express API (Docker → ECR → ECS)
+├── infra/                   Pulumi (VPC, RDS, S3, KMS, IAM, ECR, …)
+│   ├── README.md            What gets created + deploy snippets
+│   ├── AWS_SETUP_GUIDE.md   Account, Pulumi, Vercel, ECS path
+│   └── ARCHITECTURE_INFRASTRUCTURE.md  Longer reference (patterns, tradeoffs)
+├── packages/                shared-types, config, …
+├── docker-compose.yml       Optional local API container only (no local Postgres)
+├── PROJECT.md               Product spec, schema, flows
+├── UI_AND_STACK_REFERENCE.md  Frontend stack notes
+└── README.md                This file
 ```
 
-## The _setup folder
+If you use Cursor starter prompts, they may live in `_setup/` (gitignored) — not required for the app.
 
-The `_setup/` folder is NOT code. It's instructions for you. Delete it after you're done setting up, or gitignore it. Don't let Cursor think it's part of the app.
+## Clerk webhooks from localhost
 
-Three files:
+Clerk needs **HTTPS**. Run the API on **:4000**, expose it with a tunnel (**`npm run tunnel:api`** with ngrok, or **`npm run tunnel:api:lt`** with localtunnel), then register the tunnel URL + `/api/webhooks/clerk` in the Clerk dashboard and set **`CLERK_WEBHOOK_SECRET`** in **`.env`**. See **`.env.example`** comments for details.
 
-- **`CURSOR_PROMPTS.md`** - the main playbook. Phase 1 has prompts P1.1 through P1.12. Phase 2 (AI features) has P2.1 through P2.4. Run them in order.
-- **`CURSOR_USER_SETTINGS.md`** - a one-time Cursor configuration. Open Cursor Settings, paste the content into "Rules for AI". Applies globally across all your projects.
-- **`pre-commit-hook.sh`** - install as a Husky pre-commit hook after you set up Husky in P1.3 or later.
+## AWS env mapping
 
-## Before you run a single Cursor prompt
+After **`cd infra && pulumi up`**, use **`pulumi stack output --show-secrets`** and map outputs to **`.env`** (`DATABASE_URL`, `S3_*`, `AWS_*`). Do **not** set **`AWS_ENDPOINT_URL`**.
 
-Sign up for these services (5 minutes):
+## Build phases (summary)
 
-1. **Clerk** (clerk.com) - create app, enable Google OAuth, save keys
-2. **Anthropic** (console.anthropic.com) - only if doing Phase 2, $10 credit
-3. **AWS** (aws.amazon.com) - can wait until P1.12 deployment
-4. **Resend** (resend.com) - free tier, easier than SES for dev
-5. **Vercel** (vercel.com) - free, for frontend deploy
+- **Phase 1:** Core signing flow, Clerk, dashboard, PDF upload/fields, email links, patient signing, S3 storage, audit log — **working locally and deployable** (Vercel + AWS as above).
+- **Phase 2 (stretch):** AI field detection, summaries, optional chat — **`PROJECT.md`**.
 
-Put the keys in a local notes file. You'll need them in `.env.local` and `.env` files later.
+## HIPAA stance
 
-## Clerk webhook from localhost (tunnel)
+The architecture targets HIPAA-eligible services and controls described in **`PROJECT.md`**. Certification requires BAAs, operational processes, and more — position the demo as **architected for**, not **certified**, HIPAA.
 
-Clerk must call your API over **HTTPS** on the public internet. Your Express API runs at `http://localhost:4000`, so you expose it with a tunnel.
+## License / use
 
-**1. Start the API** (from the repo root: `npm run dev`, or run only `@clinicsign/api` so port **4000** is listening).
-
-**2. Start a tunnel** (second terminal), using **one** of:
-
-| Command | What you need |
-|--------|----------------|
-| `npm run tunnel:api` | **ngrok** on your PATH. On macOS: `brew install ngrok/ngrok/ngrok`. **First time only:** create a free account at [ngrok](https://dashboard.ngrok.com/signup), then run `ngrok config add-authtoken <token>` from [Your Authtoken](https://dashboard.ngrok.com/get-started/your-authtoken). |
-| `npm run tunnel:api:lt` | **No ngrok account.** Uses `localtunnel` (installed with the repo). Less reliable than ngrok; fine for quick tests. |
-
-**3. Copy the HTTPS URL** the tunnel prints (ngrok shows a `Forwarding` line like `https://abcd.ngrok-free.app`; localtunnel prints a `loca.lt` URL).
-
-**4. In Clerk** → **Configure** → **Webhooks** → **Add endpoint**:
-
-- URL: `https://<tunnel-host>/api/webhooks/clerk` (example: `https://abcd.ngrok-free.app/api/webhooks/clerk`)
-- Events: at least `user.created` (optional: `user.updated`, `user.deleted`)
-
-**5. Copy the endpoint Signing secret** (`whsec_…`) into your repo root **`.env`** as `CLERK_WEBHOOK_SECRET=`, then **restart the API**.
-
-**6. Test** by signing in at `http://localhost:3000` or sending a test event from the webhook page. If the tunnel URL changes (new ngrok session), update the endpoint URL in Clerk.
-
-**7. If you signed up before webhooks worked**, either replay **`user.created`** from the Clerk webhook delivery log, or run **`npm run backfill:clerk-users -w @clinicsign/api`** (reads Clerk’s user list and upserts into Postgres — same as the webhook).
-
-## Immediately after unzipping
-
-```bash
-# 1. Init git
-git init
-
-# 2. Set up Cursor user settings (one-time)
-#    Open Cursor > Settings > General > Rules for AI
-#    Paste contents of _setup/CURSOR_USER_SETTINGS.md
-
-# 3. Start with the first prompt
-#    Open _setup/CURSOR_PROMPTS.md
-#    Find "P1.1 - Monorepo scaffolding"
-#    Paste the prompt into Cursor chat
-#    Review the generated code
-#    Commit
-
-# 4. Continue through P1.1a, P1.2, P1.3, ...
-```
-
-## Build order summary
-
-- **P1.1**: scaffold the monorepo
-- **P1.1a**: wire up the design system (CRITICAL, do before any UI)
-- **P1.2**: Prisma schema and migrations
-- **P1.3**: API core infrastructure
-- **P1.4**: Clerk authentication
-- **P1.5**: document CRUD APIs
-- **P1.6**: sending + patient signing APIs
-- **P1.7**: landing page + dashboard
-- **P1.8**: document editor
-- **P1.9**: patient signing page
-- **P1.10**: document detail page
-- **P1.11**: polish + tests
-- **P1.12**: deploy to AWS + Vercel
-
-Stop at P1.12. Verify everything works end-to-end with real users.
-
-Only then, if time permits, move to Phase 2:
-- **P2.1**: AI auto-detect fields (Claude vision)
-- **P2.2**: plain-language summary for patients
-- **P2.3**: chat with document (stretch)
-- **P2.4**: final README + Loom recording
-
-## When you get the actual assignment prompt
-
-Paste it into Claude chat. I will review it and tell you what to adjust in PROJECT.md before you start coding. The plan here is designed for the ideal case; the real prompt may have constraints we need to honor.
-
-## Good luck bossman
-
-You have a clean repo, strong rules, a real design system, and a tested plan. Believe in yourself. Build methodically. Commit often. Ship Phase 1 before Phase 2. You will get this job.
+Private / take-home use unless you add a license.

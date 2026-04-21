@@ -6,6 +6,7 @@ import type {
   DocumentsListResponse,
   PatchDocumentFieldInput,
   PresignedUrlResponse,
+  SigningViewResponse,
 } from "./api-types.js";
 
 export class ApiError extends Error {
@@ -164,4 +165,27 @@ export async function fetchPresignedDownload(
     }
   );
   return parseApiJson<PresignedUrlResponse>(res);
+}
+
+export async function fetchSigningView(rawToken: string): Promise<SigningViewResponse> {
+  const res = await fetch(
+    `${getBrowserApiBaseUrl()}/api/sign/${encodeURIComponent(rawToken)}`,
+    { cache: "no-store" }
+  );
+  return parseApiJson<SigningViewResponse>(res);
+}
+
+export async function completeSigning(
+  rawToken: string,
+  fieldValues: Array<{ fieldId: string; value: string }>
+): Promise<void> {
+  const res = await fetch(
+    `${getBrowserApiBaseUrl()}/api/sign/${encodeURIComponent(rawToken)}/complete`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fieldValues }),
+    }
+  );
+  await parseApiJson<{ document: unknown }>(res);
 }

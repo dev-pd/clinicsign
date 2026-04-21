@@ -14,7 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
+import { Document, Page } from "react-pdf";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,16 +31,7 @@ import {
   fetchPresignedDownload,
   patchDocument,
 } from "@/lib/api-client";
-
-/** Same-origin worker avoids CSP/offline failures from a CDN. File must match `pdfjs-dist` version. */
-function configurePdfJsWorker(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  pdfjs.GlobalWorkerOptions.workerSrc = `${window.location.origin}/pdf.worker.min.mjs`;
-}
-
-configurePdfJsWorker();
+import "@/lib/pdf-worker";
 
 // Text/annotation layers are disabled on `<Page>` — no need for Mozilla pdf.js
 // layer CSS (it also adds :root vars and extra chunks). If you turn layers on,

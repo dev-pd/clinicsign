@@ -29,7 +29,11 @@ COPY apps/api ./apps/api
 
 RUN npm run build --workspace=@clinicsign/api
 
-RUN npm prune --omit=dev
+# NOTE: We intentionally keep devDependencies in the runtime image so the Prisma CLI
+# is available to run migrations from inside ECS (RDS is private, so laptop migrations
+# won't work without extra networking). For a long-lived production setup, prefer
+# CI-run migrations or a dedicated migration task/image.
+# RUN npm prune --omit=dev
 
 FROM node:20-alpine AS runner
 

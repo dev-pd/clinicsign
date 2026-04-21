@@ -96,3 +96,26 @@ export type PresignedUrlResponse = {
   url: string;
   expiresInSeconds: number;
 };
+
+/** Patient signing: GET /api/sign/:token */
+export type SigningViewResponse = {
+  document: {
+    id: string;
+    title: string;
+    status: DocumentStatus;
+    plainSummary: string | null;
+  };
+  fields: Array<{
+    id: string;
+    type: ApiFieldType;
+    page: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    required: boolean;
+    value: string | null;
+  }>;
+  recipient: { name: string; email: string };
+  originalPdfUrl: string;
+};

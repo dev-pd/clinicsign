@@ -48,10 +48,10 @@ Do not substitute these without discussion:
 - Anthropic Claude Sonnet 4.6 for AI features (Phase 2 only)
 - AWS S3 for file storage
 - Resend for email in dev, AWS SES for prod
-- LocalStack for local S3 emulation
+- AWS RDS (PostgreSQL) and S3 — provision with Pulumi in `infra/` (real AWS)
 - Vitest for testing
-- Docker Compose for local dev
-- Deploy: Vercel (frontend) + AWS ECS Fargate (backend) + RDS + S3
+- Optional: `docker-compose.yml` runs the API container only; DB is still RDS
+- Deploy: Vercel (`apps/web`) + AWS (ECR → ECS Fargate + ALB for `apps/api`, RDS, S3)
 
 ## Auth approach
 
@@ -142,7 +142,7 @@ clinicsign/
 ├── packages/
 │   ├── shared-types/
 │   └── config/
-├── docker-compose.yml
+├── docker-compose.yml   (optional API container; not local Postgres)
 ├── turbo.json
 ├── package.json
 ├── PROJECT.md
@@ -151,10 +151,9 @@ clinicsign/
 
 ## Environment parity
 
-- Every developer should run three commands and have the full app: `npm install`, `docker-compose up`, `npm run dev`
-- LocalStack emulates S3 in dev so no AWS account needed to build
+- Full app: `npm install`, **`pulumi up`** in `infra/` (RDS + S3 + …), copy stack outputs to `.env`, then `npm run dev` (and Prisma migrate against RDS)
 - Clerk works identically in dev and prod (dev instance keys vs prod instance keys)
-- Prod config diverges only in env vars pointing at real AWS + Clerk prod instance
+- Prod config diverges in env vars and architecture (private RDS, ECS task roles, etc.)
 
 ## HIPAA stance
 

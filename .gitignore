@@ -50,7 +50,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Local AWS / LocalStack data
+# Local tooling / volumes
 .localstack/
 volume/
 

@@ -128,9 +128,9 @@ These will be called out in README as future work:
 | Email | Resend (dev) / AWS SES (prod) | Resend has nicer DX, SES has HIPAA story |
 | Logging | Pino | Structured JSON logs |
 | Testing | Vitest | Fast, modern |
-| Dev emulation | LocalStack (for S3) | Run AWS locally in Docker |
+| AWS persistence | RDS (PostgreSQL) + S3 | Provisioned via Pulumi (`infra/`) |
 | AI (Phase 2) | Anthropic Claude Sonnet 4.6 | Vision for field detection, chat for RAG |
-| Deployment | Vercel (web) + AWS ECS Fargate (api) + RDS + S3 | Production-grade |
+| Deployment | Vercel (`apps/web`) + AWS (ECR → ECS Fargate + ALB for `apps/api`) + RDS + S3 | See `infra/README.md` |
 
 ## Database schema
 
@@ -380,7 +380,8 @@ clinicsign/
 ├── packages/
 │   ├── shared-types/
 │   └── config/
-├── docker-compose.yml
+├── infra/                     Pulumi: VPC, RDS, S3, KMS, IAM, ECR (see infra/README.md)
+├── docker-compose.yml         Optional: API container only; DB is AWS RDS
 ├── turbo.json
 ├── package.json
 └── README.md

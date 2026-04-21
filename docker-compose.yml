@@ -1,29 +1,9 @@
+# Optional: run the API in Docker locally. Postgres and S3 are NOT here — use AWS RDS + S3
+# (provision with `pulumi up` in `infra/` and copy outputs into `.env`).
+#
+#   npm run docker:api
+#
 services:
-  # Host port 5433 avoids clashing with a local PostgreSQL install on 5432 (common on macOS).
-  postgres:
-    image: postgres:16-alpine
-    ports:
-      - "5433:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: clinicsign
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  localstack:
-    image: localstack/localstack:4.4.0
-    ports:
-      - "4566:4566"
-    environment:
-      SERVICES: s3
-      DEBUG: "0"
-    volumes:
-      - localstack_data:/var/lib/localstack
-
-  # Containerized API on host :4001 so it never clashes with local `npm run dev` (:4000).
-  # Start with: docker compose --profile docker-api up -d --build api
-  # Or: npm run docker:api
   api:
     profiles:
       - docker-api
@@ -35,7 +15,3 @@ services:
       - "4001:4000"
     environment:
       PORT: "4000"
-
-volumes:
-  postgres_data:
-  localstack_data:

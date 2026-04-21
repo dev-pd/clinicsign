@@ -8,9 +8,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(here, "../.env") });
 config({ path: resolve(here, "../../../.env") });
 
-if (!process.env.DATABASE_URL && process.env.NODE_ENV !== "production") {
-  process.env.DATABASE_URL =
-    "postgresql://postgres:postgres@127.0.0.1:5433/clinicsign";
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL is required. Set it from Pulumi: `cd infra && pulumi stack output databaseUrl --show-secrets`"
+  );
 }
 
 const prisma = new PrismaClient();

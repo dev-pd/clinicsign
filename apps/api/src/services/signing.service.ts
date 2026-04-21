@@ -1,13 +1,23 @@
-import { PDFDocument } from "pdf-lib";
-
 import type { Prisma } from "@prisma/client";
 import { DocumentStatus } from "@prisma/client";
 
+import { env } from "../config/env.js";
+import { logger } from "../config/logger.js";
 import { prisma } from "../lib/prisma.js";
 import { badRequest, notFound } from "../utils/errors.js";
 
 import { appendAuditLog } from "./audit.service.js";
-import { getObjectBuffer, getPresignedDownloadUrl, putPdfObject } from "./s3.service.js";
+import {
+  sendDocumentSignedToProvider,
+  sendDocumentSignedToRecipient,
+} from "./email.service.js";
+import { renderFieldValuesOntoPdf } from "./pdf-field-renderer.js";
+import {
+  getObjectBuffer,
+  getPresignedDownloadUrl,
+  getPresignedDownloadUrlForEmail,
+  putPdfObject,
+} from "./s3.service.js";
 import { hashSigningToken } from "./token.service.js";
 
 function objectKeyForSignedPdf(clinicId: string, documentId: string): string {
@@ -188,10 +198,9 @@ export async function completeSigning(input: {
   const clinicId = doc.clinicId;
   const originalKey = doc.originalPdfKey;
   const originalBytes = await getObjectBuffer(originalKey);
-  const pdf = await PDFDocument.load(originalBytes);
-  const signedBytes = await pdf.save();
+  const filledBytes = await renderFieldValuesOntoPdf(originalBytes, doc.fields, updates);
   const signedKey = objectKeyForSignedPdf(clinicId, doc.id);
-  await putPdfObject(signedKey, Buffer.from(signedBytes));
+  await putPdfObject(signedKey, Buffer.from(filledBytes));
 
   const now = new Date();
 
@@ -236,6 +245,37 @@ export async function completeSigning(input: {
     where: { id: doc.id },
     include: { fields: true, recipients: true },
   });
+
+  if (updated.signedPdfKey) {
+    try {
+      const signedPdfUrl = await getPresignedDownloadUrlForEmail(updated.signedPdfKey);
+      const recipientRow = updated.recipients[0];
+      if (recipientRow) {
+        await sendDocumentSignedToRecipient({
+          to: recipientRow.email,
+          recipientName: recipientRow.name,
+          documentTitle: updated.title,
+          signedPdfUrl,
+        });
+      }
+      const provider = await prisma.user.findUniqueOrThrow({
+        where: { id: updated.createdByUserId },
+      });
+      const documentUrl = `${env.WEB_APP_URL.replace(/\/$/, "")}/dashboard/documents/${updated.id}`;
+      await sendDocumentSignedToProvider({
+        to: provider.email,
+        providerName: provider.name,
+        documentTitle: updated.title,
+        signedPdfUrl,
+        documentUrl,
+      });
+    } catch (err) {
+      logger.error(
+        { err, documentId: updated.id },
+        "Post-sign notification email failed (document still saved)"
+      );
+    }
+  }
 
   return { document: updated };
 }

@@ -114,13 +114,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "require('http').get('http://localhost:4000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 ```
 
-## LocalStack for local development
+## AWS-only development (this repo)
 
-- LocalStack runs in Docker Compose alongside Postgres. Services enabled: S3, SES, STS.
-- Environment points to LocalStack endpoint (`http://localhost:4566`) in dev.
-- AWS SDK config: `endpoint`, `forcePathStyle: true` for S3, fake credentials (`test`/`test`).
-- An init script creates the S3 bucket and verifies the SES identity on Docker startup.
-- Config detects LocalStack via `AWS_ENDPOINT_URL` env var. In prod, this is unset.
+- **No LocalStack.** S3 and RDS are real AWS resources created by Pulumi (`infra/`).
+- **`AWS_ENDPOINT_URL`** must be **unset** so the AWS SDK talks to AWS (not a mock endpoint).
+- Use **`pulumi stack output`** to populate `.env` (`databaseUrl`, `s3BucketName`, IAM keys for the app user).
 
 ## Infrastructure as Code
 

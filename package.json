@@ -14,7 +14,6 @@
     "typecheck": "turbo run typecheck",
     "docker:api:build": "docker build -t clinicsign-api:local -f apps/api/Dockerfile .",
     "docker:api": "docker compose --profile docker-api up -d --build api",
-    "docker:infra": "docker compose up -d",
     "docker:down": "docker compose down",
     "db:migrate": "turbo run db:migrate --filter=@clinicsign/api",
     "db:generate": "turbo run db:generate --filter=@clinicsign/api",

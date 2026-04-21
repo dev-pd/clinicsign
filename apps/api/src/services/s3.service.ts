@@ -11,6 +11,9 @@ import { getS3Client } from "./s3-client.js";
 
 const PRESIGNED_TTL_SECONDS = 300;
 
+/** Longer TTL for download links included in outbound email. */
+const EMAIL_PRESIGNED_TTL_SECONDS = 7 * 24 * 60 * 60;
+
 function client() {
   return getS3Client();
 }
@@ -45,4 +48,14 @@ export async function getPresignedDownloadUrl(key: string): Promise<string> {
     Key: key,
   });
   return getSignedUrl(client(), command, { expiresIn: PRESIGNED_TTL_SECONDS });
+}
+
+export async function getPresignedDownloadUrlForEmail(key: string): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: env.S3_BUCKET_NAME,
+    Key: key,
+  });
+  return getSignedUrl(client(), command, {
+    expiresIn: EMAIL_PRESIGNED_TTL_SECONDS,
+  });
 }
