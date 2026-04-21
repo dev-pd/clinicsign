@@ -6,6 +6,7 @@ import { pinoHttp } from "pino-http";
 
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
+import { clerkWebhookHandler } from "./handlers/clerk-webhook.handler.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { apiRouter } from "./routes/index.js";
@@ -34,6 +35,15 @@ export function createApp(): express.Application {
         requestId: (req as express.Request).id,
       }),
     })
+  );
+
+  // Clerk webhooks require the raw body for Svix verification; must run before `express.json()`.
+  app.post(
+    "/api/webhooks/clerk",
+    express.raw({ type: "application/json" }),
+    (req, res, next) => {
+      void clerkWebhookHandler(req, res).catch(next);
+    }
   );
 
   app.use(express.json({ limit: "10mb" }));
