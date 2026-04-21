@@ -89,6 +89,8 @@ Clerk must call your API over **HTTPS** on the public internet. Your Express API
 
 **6. Test** by signing in at `http://localhost:3000` or sending a test event from the webhook page. If the tunnel URL changes (new ngrok session), update the endpoint URL in Clerk.
 
+**7. If you signed up before webhooks worked**, either replay **`user.created`** from the Clerk webhook delivery log, or run **`npm run backfill:clerk-users -w @clinicsign/api`** (reads Clerk’s user list and upserts into Postgres — same as the webhook).
+
 ## Immediately after unzipping
 
 ```bash
