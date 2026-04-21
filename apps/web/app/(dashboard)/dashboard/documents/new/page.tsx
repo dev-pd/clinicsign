@@ -91,7 +91,12 @@ export default function NewDocumentPage(): JSX.Element {
                 toast.error("Only PDF files are supported.");
                 return;
               }
-              mutation.mutate({ title: values.title, file });
+              const title = values.title?.trim() ?? "";
+              if (!title) {
+                toast.error("Enter a title for this document.");
+                return;
+              }
+              mutation.mutate({ title, file });
             })}
           >
             <div className="space-y-2">
