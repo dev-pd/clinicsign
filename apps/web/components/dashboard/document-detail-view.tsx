@@ -335,6 +335,8 @@ export function DocumentDetailView({
                 <CardDescription>
                   {doc.status === "DRAFT"
                     ? "Place fields on the PDF, then save. Drag to move fields in Select mode."
+                    : hasSignedPdf
+                    ? "Signed copy with the recipient's entries flattened onto the document."
                     : "Fields are locked after send. Download PDFs from the actions above."}
                 </CardDescription>
               </CardHeader>
@@ -345,6 +347,7 @@ export function DocumentDetailView({
                     readOnly={doc.status !== "DRAFT"}
                     fields={doc.fields}
                     updatedAt={doc.updatedAt}
+                    pdfVariant={hasSignedPdf ? "signed" : "original"}
                   />
                 </PdfShellErrorBoundary>
               </CardContent>

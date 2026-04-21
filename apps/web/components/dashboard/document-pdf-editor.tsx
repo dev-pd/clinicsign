@@ -112,6 +112,14 @@ export type DocumentPdfEditorProps = {
   readOnly: boolean;
   fields: ApiDocumentField[];
   updatedAt: string;
+  /**
+   * Which PDF to display.
+   * - "original": the uploaded file (used during drafting and when there is
+   *   no signed copy yet). Field overlays are drawn on top.
+   * - "signed":   the flattened copy produced at sign time, which already
+   *   has the patient's values baked in. Overlays are suppressed.
+   */
+  pdfVariant?: "original" | "signed";
 };
 
 export function DocumentPdfEditor({
@@ -119,6 +127,7 @@ export function DocumentPdfEditor({
   readOnly,
   fields: serverFields,
   updatedAt,
+  pdfVariant = "original",
 }: DocumentPdfEditorProps): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
@@ -183,7 +192,7 @@ export function DocumentPdfEditor({
         const { url } = await fetchPresignedDownload(
           token,
           documentId,
-          "original"
+          pdfVariant
         );
         if (!cancelled) {
           setPdfUrl(url);
@@ -200,7 +209,7 @@ export function DocumentPdfEditor({
     return () => {
       cancelled = true;
     };
-  }, [documentId, getToken, updatedAt]);
+  }, [documentId, getToken, updatedAt, pdfVariant]);
 
   const dirty = useMemo(
     () => JSON.stringify(fields) !== JSON.stringify(serverModel),
@@ -491,7 +500,9 @@ export function DocumentPdfEditor({
                       renderTextLayer={false}
                       renderAnnotationLayer={false}
                     />
-                    {fields
+                    {pdfVariant === "signed"
+                      ? null
+                      : fields
                       .filter((f) => f.page === pageNumber)
                       .map((field) => (
                         <div
