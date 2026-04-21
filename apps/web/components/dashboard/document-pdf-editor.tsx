@@ -142,6 +142,17 @@ export function DocumentPdfEditor({
   );
   const [tool, setTool] = useState<ToolMode>("select");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Ghost preview that follows the cursor when a field tool is armed.
+  // Lives at page-relative (0..1) coords so we can render it without
+  // re-measuring on every render — same coordinate system as fields.
+  const [ghost, setGhost] = useState<
+    | {
+        page: number;
+        x: number;
+        y: number;
+      }
+    | null
+  >(null);
 
   const activeDrag = useRef<{
     fieldId: string;
@@ -373,21 +384,58 @@ export function DocumentPdfEditor({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (readOnly || !selectedId) {
+      if (readOnly) {
+        return;
+      }
+      const t = e.target as HTMLElement;
+      const isTyping = t.tagName === "INPUT" || t.tagName === "TEXTAREA";
+
+      // ESC disarms the active tool (Figma-style cancel). Also clears the
+      // selection so the user gets a clean slate.
+      if (e.key === "Escape") {
+        if (tool !== "select") {
+          e.preventDefault();
+          setTool("select");
+          setGhost(null);
+        } else if (selectedId) {
+          setSelectedId(null);
+        }
+        return;
+      }
+
+      if (!selectedId || isTyping) {
         return;
       }
       if (e.key === "Delete" || e.key === "Backspace") {
-        const t = e.target as HTMLElement;
-        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") {
-          return;
-        }
         e.preventDefault();
         removeField(selectedId);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [readOnly, selectedId, removeField]);
+  }, [readOnly, selectedId, removeField, tool]);
+
+  // Track the cursor over each page (in 0..1 coords) so we can render a
+  // ghost preview of where the field will land. Only fires when a tool is
+  // armed — keeps Select-mode hovering free of state churn.
+  function handlePageMouseMove(
+    pageNumber: number,
+    e: React.MouseEvent<HTMLDivElement>
+  ): void {
+    if (readOnly || tool === "select") {
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    setGhost({ page: pageNumber, x: nx, y: ny });
+  }
+
+  function handlePageMouseLeave(): void {
+    if (ghost) {
+      setGhost(null);
+    }
+  }
 
   const selected = fields.find((f) => f.id === selectedId) ?? null;
 
@@ -457,9 +505,25 @@ export function DocumentPdfEditor({
 
       {!readOnly ? (
         <p className="text-body-sm text-muted-foreground">
-          Positions are stored relative to each page (0–1). Choose a field type,
-          then click on the page. Drag fields in Select mode. Press Delete to
-          remove.
+          {tool === "select" ? (
+            <>
+              Drag fields to reposition. Press{" "}
+              <kbd className="rounded border bg-muted px-1 font-mono text-caption">
+                Delete
+              </kbd>{" "}
+              to remove a selected field.
+            </>
+          ) : (
+            <>
+              Click on the page to drop a{" "}
+              <strong className="text-foreground">{FIELD_LABEL[tool]}</strong>{" "}
+              field. Press{" "}
+              <kbd className="rounded border bg-muted px-1 font-mono text-caption">
+                Esc
+              </kbd>{" "}
+              to cancel.
+            </>
+          )}
         </p>
       ) : null}
 
@@ -497,12 +561,21 @@ export function DocumentPdfEditor({
           {numPages > 0
             ? Array.from({ length: numPages }, (_, i) => {
                 const pageNumber = i + 1;
+                const armed = tool !== "select" && !readOnly;
+                const showGhost =
+                  armed && ghost !== null && ghost.page === pageNumber;
+                const ghostDims = armed ? FIELD_DEFAULTS[tool] : null;
                 return (
                   <div
                     key={pageNumber}
                     data-pdf-page-wrap
-                    className="relative inline-block max-w-full"
+                    className={cn(
+                      "relative inline-block max-w-full",
+                      armed && "cursor-crosshair"
+                    )}
                     onClick={(e) => handlePageClick(pageNumber, e)}
+                    onMouseMove={(e) => handlePageMouseMove(pageNumber, e)}
+                    onMouseLeave={handlePageMouseLeave}
                   >
                     <Page
                       pageNumber={pageNumber}
@@ -511,6 +584,18 @@ export function DocumentPdfEditor({
                       renderTextLayer={false}
                       renderAnnotationLayer={false}
                     />
+                    {showGhost && ghostDims ? (
+                      <div
+                        aria-hidden
+                        className="border-primary/70 bg-primary/15 pointer-events-none absolute rounded-sm border-2 border-dashed transition-none"
+                        style={{
+                          left: `${clamp01(ghost.x - ghostDims.width / 2) * 100}%`,
+                          top: `${clamp01(ghost.y - ghostDims.height / 2) * 100}%`,
+                          width: `${ghostDims.width * 100}%`,
+                          height: `${ghostDims.height * 100}%`,
+                        }}
+                      />
+                    ) : null}
                     {pdfVariant === "signed"
                       ? null
                       : fields

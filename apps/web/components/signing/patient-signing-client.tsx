@@ -246,13 +246,16 @@ export function PatientSigningClient({
       const canvas = canvasRef.current;
       if (!canvas) return;
 
+      // Read the rendered size from CSS (Tailwind controls it responsively
+      // via h-[160px] sm:h-[180px]). Hardcoding 180 here would make the
+      // backing buffer mismatch the on-screen size on phones, dropping
+      // strokes outside the visible area.
       const cssWidth = canvas.clientWidth || 440;
-      const cssHeight = 180;
+      const cssHeight = canvas.clientHeight || 180;
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
 
       canvas.width = Math.floor(cssWidth * ratio);
       canvas.height = Math.floor(cssHeight * ratio);
-      canvas.style.height = `${cssHeight}px`;
 
       const ctx = canvas.getContext("2d");
       if (ctx) {
@@ -368,14 +371,21 @@ export function PatientSigningClient({
     );
   }
 
+  // Neutral loading state. We deliberately don't promise "Loading document…"
+  // here because the result might be the signed-success screen (revisited
+  // link), an already-signed message, or an expired-link card. Promising
+  // a document then immediately switching to a different screen is
+  // jarring; a bare spinner is honest about not knowing yet.
   if (viewQuery.isPending) {
     return (
       <main
         data-audience="patient"
         className="bg-background flex min-h-screen flex-col items-center justify-center gap-3 p-6"
       >
-        <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" aria-hidden />
-        <p className="text-body-lg text-muted-foreground">Loading document…</p>
+        <Loader2
+          className="text-muted-foreground h-8 w-8 animate-spin"
+          aria-label="Loading"
+        />
       </main>
     );
   }
@@ -476,12 +486,14 @@ export function PatientSigningClient({
     <>
       <main
         data-audience="patient"
-        className="bg-background min-h-screen px-4 py-8 md:px-8"
+        className="bg-background min-h-screen px-3 pb-32 pt-6 sm:px-4 sm:py-8 md:px-8"
       >
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
           <header className="space-y-1">
-            <h1 className="text-h1 text-foreground">{view.document.title}</h1>
-            <p className="text-body-lg text-muted-foreground">
+            <h1 className="text-h2 sm:text-h1 text-foreground">
+              {view.document.title}
+            </h1>
+            <p className="text-body sm:text-body-lg text-muted-foreground">
               Hi {view.recipient.name}, please review and complete all fields.
             </p>
           </header>
@@ -492,16 +504,18 @@ export function PatientSigningClient({
                 <CardTitle className="text-h4">What you&apos;re signing</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-body-lg">{view.document.plainSummary}</p>
+                <p className="text-body sm:text-body-lg">
+                  {view.document.plainSummary}
+                </p>
               </CardContent>
             </Card>
           ) : null}
 
           <Card className="overflow-hidden shadow-sm">
-            <CardContent className="pt-6">
+            <CardContent className="px-2 pt-3 pb-3 sm:px-6 sm:pt-6">
               <div
                 ref={containerRef}
-                className="bg-muted/30 border-border max-h-[min(80vh,900px)] w-full overflow-y-auto overscroll-contain rounded-md border p-3"
+                className="bg-muted/30 border-border max-h-[min(75vh,900px)] w-full overflow-y-auto overscroll-contain rounded-md border p-2 sm:p-3"
                 aria-label={
                   numPages > 1
                     ? `Document, ${numPages} pages — scroll to see more`
@@ -566,7 +580,7 @@ export function PatientSigningClient({
                                       : `Add ${FIELD_LABEL[field.type]}`
                                   }
                                   className={cn(
-                                    "absolute flex items-center overflow-hidden border-2 transition-colors",
+                                    "absolute flex touch-manipulation items-center overflow-hidden border-2 transition-colors",
                                     filled
                                       ? "border-success/70 bg-success/5 text-success"
                                       : "border-primary/60 bg-primary/5 text-primary hover:bg-primary/10",
@@ -615,7 +629,8 @@ export function PatientSigningClient({
             </CardContent>
           </Card>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          {/* Inline submit area for desktop / tablet — stays inside flow. */}
+          <div className="hidden sm:flex sm:flex-row sm:justify-end">
             <Button
               type="button"
               size="lg"
@@ -648,6 +663,31 @@ export function PatientSigningClient({
             </p>
           ) : null}
         </div>
+
+        {/* Sticky submit bar on mobile so the patient never has to scroll
+            back to the bottom after filling a field. iOS-safe area for
+            home-indicator devices via env(safe-area-inset-bottom). */}
+        <div
+          className="bg-background/95 border-border fixed inset-x-0 bottom-0 z-40 border-t px-3 pt-3 backdrop-blur sm:hidden"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+        >
+          <Button
+            type="button"
+            size="lg"
+            className="min-h-12 w-full text-body-lg"
+            disabled={completeMut.isPending}
+            onClick={handleSubmit}
+          >
+            {completeMut.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />
+                Submitting…
+              </>
+            ) : (
+              "Submit signed document"
+            )}
+          </Button>
+        </div>
       </main>
 
       <Dialog
@@ -658,7 +698,7 @@ export function PatientSigningClient({
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {activeField ? FIELD_LABEL[activeField.type] : ""}
@@ -682,8 +722,7 @@ export function PatientSigningClient({
                   <div className="border-border bg-white relative w-full overflow-hidden rounded-md border">
                     <canvas
                       ref={canvasRef}
-                      style={{ width: "100%", height: "180px", display: "block" }}
-                      className="touch-none"
+                      className="block h-[160px] w-full touch-none sm:h-[180px]"
                     />
                   </div>
                   <Button
