@@ -652,7 +652,7 @@ export function DocumentPdfEditor({
           onLoadSuccess={({ numPages: n }) => {
             setNumPages(n);
           }}
-          className="flex flex-col items-stretch gap-6"
+          className="flex flex-col items-center gap-6"
         >
           {numPages > 0
             ? Array.from({ length: numPages }, (_, i) => {
@@ -665,8 +665,9 @@ export function DocumentPdfEditor({
                   <div
                     key={pageNumber}
                     data-pdf-page-wrap
+                    style={{ width: pageWidth }}
                     className={cn(
-                      "relative block w-full",
+                      "relative block max-w-full",
                       armed && "cursor-crosshair"
                     )}
                     onClick={(e) => handlePageClick(pageNumber, e)}
