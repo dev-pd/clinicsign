@@ -9,7 +9,7 @@ config:
     NODE_ENV: production
     LOG_LEVEL: info
     CLERK_PUBLISHABLE_KEY: pk_test_Y3VkZGx5LWphdmVsaW4tMTcuY2xlcmsuYWNjb3VudHMuZGV2JA
-    EMAIL_FROM: ClinicSign <onboarding@resend.dev>
+    EMAIL_FROM: ClinicSign <help@knowpd.com>
     S3_BUCKET_NAME: clinicsign-dev-docs-20260421123610433700000001
     AWS_REGION: us-east-1
   clinicsign-infra:apiEnvSecret:
