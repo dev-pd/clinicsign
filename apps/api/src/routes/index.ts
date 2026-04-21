@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { documentsRouter } from "./documents.routes.js";
 import { meRouter } from "./me.js";
+import { signRouter } from "./sign.routes.js";
 
 /**
  * JSON API mounted at `/api`. Domain routes are added in later prompts.
@@ -14,3 +15,4 @@ apiRouter.get("/health", (_req, res) => {
 
 apiRouter.use("/me", meRouter);
 apiRouter.use("/documents", documentsRouter);
+apiRouter.use("/sign", signRouter);

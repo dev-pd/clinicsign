@@ -10,6 +10,11 @@ import {
   patchDocumentBodySchema,
   uuidParamSchema,
 } from "../schemas/document.schemas.js";
+import { sendDocumentBodySchema } from "../schemas/send.schemas.js";
+import {
+  resendDocumentForClinic,
+  sendDocumentForClinic,
+} from "../services/document-send.service.js";
 import { getPresignedDownloadUrl } from "../services/s3.service.js";
 import {
   createDraftDocument,
@@ -138,6 +143,55 @@ documentsRouter.get(
     }
     const url = await getPresignedDownloadUrl(key);
     res.json({ url, expiresInSeconds: 300 });
+  })
+);
+
+documentsRouter.post(
+  "/:id/send",
+  asyncRoute(async (req, res) => {
+    const params = uuidParamSchema.safeParse(req.params);
+    if (!params.success) {
+      throw params.error;
+    }
+    const body = sendDocumentBodySchema.safeParse(req.body);
+    if (!body.success) {
+      throw body.error;
+    }
+    const user = req.appUser!;
+    const updated = await sendDocumentForClinic(
+      params.data.id,
+      user.clinicId,
+      user.id,
+      body.data
+    );
+    res.status(200).json({
+      document: {
+        ...updated,
+        recipients: updated.recipients.map(mapRecipientPublic),
+      },
+    });
+  })
+);
+
+documentsRouter.post(
+  "/:id/resend",
+  asyncRoute(async (req, res) => {
+    const params = uuidParamSchema.safeParse(req.params);
+    if (!params.success) {
+      throw params.error;
+    }
+    const user = req.appUser!;
+    const updated = await resendDocumentForClinic(
+      params.data.id,
+      user.clinicId,
+      user.id
+    );
+    res.status(200).json({
+      document: {
+        ...updated,
+        recipients: updated.recipients.map(mapRecipientPublic),
+      },
+    });
   })
 );
 

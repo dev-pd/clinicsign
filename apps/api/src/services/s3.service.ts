@@ -25,6 +25,20 @@ export async function putPdfObject(key: string, body: Buffer): Promise<void> {
   await client().send(new PutObjectCommand(input));
 }
 
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const out = await client().send(
+    new GetObjectCommand({
+      Bucket: env.S3_BUCKET_NAME,
+      Key: key,
+    })
+  );
+  if (!out.Body) {
+    throw new Error("S3 object has no body.");
+  }
+  const arr = await out.Body.transformToByteArray();
+  return Buffer.from(arr);
+}
+
 export async function getPresignedDownloadUrl(key: string): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: env.S3_BUCKET_NAME,
