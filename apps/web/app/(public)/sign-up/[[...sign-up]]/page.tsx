@@ -2,26 +2,41 @@ import { SignUp } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { clerkAppearance } from "@/lib/clerk-appearance";
+
 export const metadata: Metadata = {
   title: "Create account · ClinicSign",
 };
 
 export default function SignUpPage(): JSX.Element {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
+    <div className="space-y-6">
+      <div className="space-y-1.5">
+        <h1 className="text-h2 text-foreground">Create your account</h1>
+        <p className="text-body text-muted-foreground">
+          Start sending signing requests in under a minute. No credit card
+          required.
+        </p>
+      </div>
+
       <SignUp
         path="/sign-up"
         routing="path"
         signInUrl="/sign-in"
         forceRedirectUrl="/dashboard"
         fallbackRedirectUrl="/dashboard"
+        appearance={clerkAppearance}
       />
-      <Link
-        href="/"
-        className="text-body text-muted-foreground underline-offset-4 hover:underline"
-      >
-        Back to home
-      </Link>
-    </main>
+
+      <p className="text-body-sm text-muted-foreground text-center">
+        Already have an account?{" "}
+        <Link
+          href="/sign-in"
+          className="text-primary font-medium underline-offset-4 hover:underline"
+        >
+          Sign in
+        </Link>
+      </p>
+    </div>
   );
 }
