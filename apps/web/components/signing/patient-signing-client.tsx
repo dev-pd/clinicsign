@@ -266,19 +266,68 @@ export function PatientSigningClient({
   }
 
   if (viewQuery.error) {
-    const msg =
-      viewQuery.error instanceof ApiError
-        ? viewQuery.error.message
-        : "Could not load this document.";
+    const apiErr =
+      viewQuery.error instanceof ApiError ? viewQuery.error : null;
+    const code = apiErr?.code ?? "";
+
+    // Not an error in the user's mind: they already finished this document.
+    if (code === "ALREADY_SIGNED") {
+      return (
+        <main
+          data-audience="patient"
+          className="bg-background flex min-h-screen flex-col items-center justify-center gap-6 p-6"
+        >
+          <CheckCircle2
+            className="text-success h-14 w-14"
+            strokeWidth={1.5}
+            aria-hidden
+          />
+          <div className="w-full max-w-md text-center space-y-2">
+            <h1 className="text-h1 text-foreground">Already signed</h1>
+            <p className="text-body-lg text-muted-foreground">
+              This document has already been completed. Your provider has a
+              signed copy — no further action is needed.
+            </p>
+          </div>
+        </main>
+      );
+    }
+
+    // Link was superseded by a resend, or TTL lapsed: neutral, not destructive.
+    const isLinkIssue =
+      code === "SIGNING_LINK_INVALID" || code === "SIGNING_LINK_EXPIRED";
+    if (isLinkIssue) {
+      return (
+        <main
+          data-audience="patient"
+          className="bg-background flex min-h-screen flex-col items-center justify-center p-6"
+        >
+          <Card className="w-full max-w-md border-border/80">
+            <CardHeader>
+              <CardTitle>This signing link is no longer valid</CardTitle>
+              <CardDescription>
+                {code === "SIGNING_LINK_EXPIRED"
+                  ? "The link has expired. Please ask your provider to resend the invitation — you'll get a fresh email link."
+                  : "A newer invitation was sent. Please use the most recent email from your provider."}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </main>
+      );
+    }
+
+    const msg = apiErr?.message ?? "Could not load this document.";
     return (
       <main
         data-audience="patient"
         className="bg-background flex min-h-screen flex-col items-center justify-center p-6"
       >
-        <Card className="max-w-md border-destructive/40">
+        <Card className="w-full max-w-md border-destructive/40">
           <CardHeader>
             <CardTitle>Unable to open document</CardTitle>
-            <CardDescription className="text-destructive">{msg}</CardDescription>
+            <CardDescription className="text-destructive">
+              {msg}
+            </CardDescription>
           </CardHeader>
         </Card>
       </main>
