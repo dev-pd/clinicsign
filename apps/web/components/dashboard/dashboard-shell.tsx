@@ -1,6 +1,6 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
+import { SignOutButton, UserButton } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -92,7 +92,20 @@ export function DashboardShell({ children }: DashboardShellProps): JSX.Element {
             </NavLink>
           </nav>
         </div>
-        <UserButton afterSignOutUrl="/" />
+        <div className="flex shrink-0 items-center gap-2">
+          <SignOutButton redirectUrl="/">
+            <button
+              type="button"
+              className={cn(
+                "text-body text-muted-foreground hover:text-foreground",
+                "rounded-md px-2 py-1 transition-colors"
+              )}
+            >
+              Sign out
+            </button>
+          </SignOutButton>
+          <UserButton afterSignOutUrl="/" />
+        </div>
       </header>
       <main className="mx-auto max-w-6xl p-4 md:p-8">{children}</main>
     </div>
