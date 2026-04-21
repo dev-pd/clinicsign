@@ -205,12 +205,13 @@ export function DocumentPdfEditor({
 }: DocumentPdfEditorProps): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Mobile-safe default: starts narrow so the first paint can never render the
-  // PDF canvas wider than its wrapper. The layout effect below corrects this
-  // synchronously before paint on the client. If the canvas were ever drawn
-  // wider than the wrapper, the wrapper's `inline-block max-w-full` would clamp
-  // it and field overlay percentages would drift relative to the visible PDF.
+  // Direct ref on the unpadded measurement div inside the scroll wrapper.
+  // We size pageWidth = pageHostRef.clientWidth so the page wrap and the
+  // canvas always share the exact same pixel width — that's what keeps
+  // field overlay % positions perfectly aligned with the visible PDF.
+  const pageHostRef = useRef<HTMLDivElement>(null);
+  // Mobile-safe default for SSR (no DOM). The layout effect below replaces
+  // this with the real measurement before the first paint on the client.
   const [containerWidth, setContainerWidth] = useState(320);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
@@ -248,8 +249,10 @@ export function DocumentPdfEditor({
 
   // useLayoutEffect so the measurement runs before paint — the PDF canvas
   // must be sized correctly on its very first render, not on the next tick.
+  // We measure pageHostRef (an unpadded host div that's the actual containing
+  // block of every page wrap) so containerWidth = wrap width by construction.
   useIsomorphicLayoutEffect(() => {
-    const el = containerRef.current;
+    const el = pageHostRef.current;
     if (!el) {
       return;
     }
@@ -328,10 +331,9 @@ export function DocumentPdfEditor({
     },
   });
 
-  // -40 leaves room for the scroll wrapper's padding (24) + its vertical
-  // scrollbar (~16). Without this the page renders wider than the wrapper's
-  // content area and triggers horizontal scrolling inside the preview.
-  const pageWidth = Math.max(280, Math.min(900, containerWidth - 40));
+  // pageHostRef.clientWidth is already the exact wrap width; capped at 900px
+  // so the editor preview never gets uncomfortably wide on huge monitors.
+  const pageWidth = Math.max(280, Math.min(900, containerWidth));
 
   const addField = useCallback((type: ApiFieldType, page: number, nx: number, ny: number) => {
     const { width: w, height: h } = FIELD_DEFAULTS[type];
@@ -522,7 +524,7 @@ export function DocumentPdfEditor({
   const selected = fields.find((f) => f.id === selectedId) ?? null;
 
   return (
-    <div ref={containerRef} className="space-y-4">
+    <div className="space-y-4">
       {!readOnly ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2" role="toolbar" aria-label="Field tools">
@@ -633,6 +635,7 @@ export function DocumentPdfEditor({
               : "PDF preview"
           }
         >
+        <div ref={pageHostRef} className="w-full">
         <Document
           file={pdfUrl}
           loading={
@@ -649,7 +652,7 @@ export function DocumentPdfEditor({
           onLoadSuccess={({ numPages: n }) => {
             setNumPages(n);
           }}
-          className="flex flex-col items-center gap-6"
+          className="flex flex-col items-stretch gap-6"
         >
           {numPages > 0
             ? Array.from({ length: numPages }, (_, i) => {
@@ -663,7 +666,7 @@ export function DocumentPdfEditor({
                     key={pageNumber}
                     data-pdf-page-wrap
                     className={cn(
-                      "relative inline-block max-w-full",
+                      "relative block w-full",
                       armed && "cursor-crosshair"
                     )}
                     onClick={(e) => handlePageClick(pageNumber, e)}
@@ -777,6 +780,7 @@ export function DocumentPdfEditor({
               })
             : null}
         </Document>
+        </div>
         </div>
       ) : !pdfLoadError ? (
         <div className="text-body text-muted-foreground flex items-center gap-2 py-8">

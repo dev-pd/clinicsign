@@ -157,15 +157,17 @@ type PatientSigningClientProps = {
 export function PatientSigningClient({
   token,
 }: PatientSigningClientProps): React.ReactElement | null {
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  // Direct ref on the unpadded measurement div inside the scroll wrapper.
+  // We size pageWidth to this exact clientWidth so the wrap and the canvas
+  // are always the same pixel width, which keeps field overlay % coords
+  // perfectly aligned with the visible PDF (no estimating padding/scrollbar).
+  const pageHostRef = React.useRef<HTMLDivElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const sigPadRef = React.useRef<SignaturePad | null>(null);
 
   // Mobile-safe default: SSR has no DOM to measure, so we start small.
-  // The layout effect below corrects this synchronously before paint on
-  // the client, but if anything ever races we'd rather be too narrow
-  // (and the page rescales up) than too wide (which makes the canvas
-  // overflow its wrapper and shifts field overlay coordinates).
+  // The layout effect below replaces this with the actual measurement
+  // of pageHostRef on the client.
   const [pageWidth, setPageWidth] = React.useState(320);
   const [numPages, setNumPages] = React.useState(0);
   const [workerReady, setWorkerReady] = React.useState(false);
@@ -200,20 +202,17 @@ export function PatientSigningClient({
     [serverDefaults, edits]
   );
 
-  // useLayoutEffect (not useEffect) because we must size the PDF before the
-  // browser paints. Otherwise the first paint uses the SSR default width and
-  // the canvas can render wider than its wrapper, which shifts the field
-  // overlay coordinates (overlays are positioned by % of the wrapper).
+  // useLayoutEffect runs synchronously before paint, so the first paint can
+  // use the real measured width. We measure pageHostRef directly (an unpadded
+  // div that's the actual containing block of every PDF page wrap), so
+  // pageWidth = wrap width by construction — no padding/scrollbar arithmetic.
   useIsomorphicLayoutEffect(() => {
-    const el = containerRef.current;
+    const el = pageHostRef.current;
     if (!el) {
       return;
     }
-    // -40 leaves room for the scroll wrapper's padding (24) + its vertical
-    // scrollbar (~16). Without this the PDF page renders wider than the
-    // wrapper's content area and triggers horizontal scrolling.
     const measure = (): void => {
-      const width = Math.max(280, el.clientWidth - 40);
+      const width = Math.max(280, el.clientWidth);
       setPageWidth(width);
     };
     const ro = new ResizeObserver(measure);
@@ -533,7 +532,6 @@ export function PatientSigningClient({
           <Card className="overflow-hidden shadow-sm">
             <CardContent className="px-2 pt-3 pb-3 sm:px-6 sm:pt-6">
               <div
-                ref={containerRef}
                 className="bg-muted/30 border-border max-h-[min(75vh,900px)] w-full overflow-y-auto overscroll-contain rounded-md border p-2 sm:p-3"
                 aria-label={
                   numPages > 1
@@ -547,6 +545,7 @@ export function PatientSigningClient({
                   Loading PDF…
                 </div>
               ) : (
+              <div ref={pageHostRef} className="w-full">
               <Document
                 file={view.originalPdfUrl}
                 loading={
@@ -563,7 +562,7 @@ export function PatientSigningClient({
                 onLoadSuccess={({ numPages }: { numPages: number }) =>
                   setNumPages(numPages)
                 }
-                className="flex flex-col items-center gap-8"
+                className="flex flex-col items-stretch gap-8"
               >
                 {numPages > 0
                   ? Array.from({ length: numPages }, (_, i) => {
@@ -572,7 +571,7 @@ export function PatientSigningClient({
                         <div
                           key={pageNumber}
                           data-pdf-page-wrap
-                          className="relative inline-block max-w-full"
+                          className="relative block w-full"
                         >
                           <Page
                             pageNumber={pageNumber}
@@ -643,6 +642,7 @@ export function PatientSigningClient({
                     })
                   : null}
               </Document>
+              </div>
               )}
               </div>
             </CardContent>
