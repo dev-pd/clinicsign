@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import { Logomark } from "@/components/brand/logomark";
 import { cn } from "@/lib/utils";
 
 type DashboardShellProps = {
@@ -18,24 +19,30 @@ const NEW_DOC_HREF = "/dashboard/documents/new";
 function NavLink({
   href,
   children,
-  className,
   onSameHref,
 }: {
   href: string;
   children: React.ReactNode;
-  className?: string;
   onSameHref?: () => void;
 }): JSX.Element {
   const pathname = usePathname() ?? "";
+  const isActive =
+    href === DASHBOARD_HREF
+      ? pathname === DASHBOARD_HREF
+      : pathname.startsWith(href);
 
   return (
     <Link
       href={href}
-      className={className}
+      aria-current={isActive ? "page" : undefined}
+      className={cn(
+        "text-body-sm rounded-md px-3 py-1.5 font-medium transition-colors",
+        isActive
+          ? "bg-accent/60 text-foreground"
+          : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
+      )}
       onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
-        if (pathname !== href) {
-          return;
-        }
+        if (pathname !== href) return;
         e.preventDefault();
         onSameHref?.();
       }}
@@ -60,42 +67,41 @@ export function DashboardShell({ children }: DashboardShellProps): JSX.Element {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-border flex h-14 flex-wrap items-center justify-between gap-4 border-b px-4 md:px-8">
-        <div className="flex flex-wrap items-center gap-4 md:gap-8">
-          <NavLink
-            href={DASHBOARD_HREF}
-            className="text-body font-medium tracking-tight text-foreground"
-            onSameHref={refreshDocumentsList}
-          >
-            ClinicSign
-          </NavLink>
-          <nav className="flex items-center gap-4" aria-label="Dashboard">
-            <NavLink
+    <div className="bg-background min-h-screen">
+      <header className="border-border bg-background/90 sticky top-0 z-10 border-b backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 md:px-8">
+          <div className="flex items-center gap-6">
+            <Link
               href={DASHBOARD_HREF}
-              className={cn(
-                "text-body text-muted-foreground hover:text-foreground",
-                "rounded-md px-2 py-1 transition-colors"
-              )}
-              onSameHref={refreshDocumentsList}
+              className="flex items-center gap-2"
+              aria-label="ClinicSign — go to dashboard"
             >
-              Documents
-            </NavLink>
-            <NavLink
-              href={NEW_DOC_HREF}
-              className={cn(
-                "text-body text-muted-foreground hover:text-foreground",
-                "rounded-md px-2 py-1 transition-colors"
-              )}
-              onSameHref={remountNewDocumentRoute}
+              <Logomark className="h-7 w-7" />
+              <span className="text-h4 text-foreground hidden tracking-tight sm:inline">
+                ClinicSign
+              </span>
+            </Link>
+            <nav
+              className="flex items-center gap-1"
+              aria-label="Dashboard navigation"
             >
-              New document
-            </NavLink>
-          </nav>
+              <NavLink
+                href={DASHBOARD_HREF}
+                onSameHref={refreshDocumentsList}
+              >
+                Documents
+              </NavLink>
+              <NavLink href={NEW_DOC_HREF} onSameHref={remountNewDocumentRoute}>
+                New document
+              </NavLink>
+            </nav>
+          </div>
+          <UserButton afterSignOutUrl="/" />
         </div>
-        <UserButton afterSignOutUrl="/" />
       </header>
-      <main className="mx-auto max-w-7xl p-4 md:px-8 md:py-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-10">
+        {children}
+      </main>
     </div>
   );
 }
