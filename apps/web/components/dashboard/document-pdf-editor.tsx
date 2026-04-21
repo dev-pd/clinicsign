@@ -331,9 +331,10 @@ export function DocumentPdfEditor({
     },
   });
 
-  // pageHostRef.clientWidth is already the exact wrap width; capped at 900px
-  // so the editor preview never gets uncomfortably wide on huge monitors.
-  const pageWidth = Math.max(280, Math.min(900, containerWidth));
+  // pageHostRef.clientWidth is the exact width available for the page wrap.
+  // No max cap: on wide monitors users want the PDF to fill the editor area,
+  // not sit at 900px with empty whitespace on both sides.
+  const pageWidth = Math.max(280, containerWidth);
 
   const addField = useCallback((type: ApiFieldType, page: number, nx: number, ny: number) => {
     const { width: w, height: h } = FIELD_DEFAULTS[type];
