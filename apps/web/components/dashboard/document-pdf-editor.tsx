@@ -13,8 +13,18 @@ import {
   Type,
   UserRound,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Document, Page } from "react-pdf";
+
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 import { Button } from "@/components/ui/button";
 import {
@@ -60,6 +70,70 @@ const TOOL_ICONS: Record<ApiFieldType, typeof PenLine> = {
   DATE: Calendar,
   CHECKBOX: CheckSquare,
   INITIAL: UserRound,
+};
+
+/**
+ * Per-type tint for the field overlay on the PDF. Keeps each field type
+ * visually distinct without breaking the design-system "calm" rule —
+ * everything is a low-opacity wash of an existing semantic token.
+ *
+ * - SIGNATURE/INITIAL share the brand sage to read as a single "sign here"
+ *   family, with INITIAL slightly muted so it doesn't fight the marquee
+ *   signature box.
+ * - DATE uses info-blue so calendars feel calendarish without shouting.
+ * - TEXT stays neutral so freeform input doesn't dominate the page.
+ * - CHECKBOX uses success-green to read as a deliberate yes/no choice.
+ *
+ * Each entry has both a normal tint (for placed fields and toolbar buttons
+ * in their idle state) and a stronger ghost tint (used for the cursor
+ * preview while a tool is armed, so the user can see exactly where the
+ * field will land).
+ */
+const FIELD_TINTS: Record<
+  ApiFieldType,
+  {
+    bg: string;
+    border: string;
+    text: string;
+    ghostBg: string;
+    ghostBorder: string;
+  }
+> = {
+  SIGNATURE: {
+    bg: "bg-primary/10",
+    border: "border-primary/60",
+    text: "text-primary",
+    ghostBg: "bg-primary/20",
+    ghostBorder: "border-primary/70",
+  },
+  INITIAL: {
+    bg: "bg-accent/50",
+    border: "border-primary/50",
+    text: "text-primary",
+    ghostBg: "bg-accent/70",
+    ghostBorder: "border-primary/60",
+  },
+  DATE: {
+    bg: "bg-info/10",
+    border: "border-info/55",
+    text: "text-info",
+    ghostBg: "bg-info/20",
+    ghostBorder: "border-info/70",
+  },
+  TEXT: {
+    bg: "bg-muted",
+    border: "border-muted-foreground/45",
+    text: "text-muted-foreground",
+    ghostBg: "bg-muted-foreground/15",
+    ghostBorder: "border-muted-foreground/55",
+  },
+  CHECKBOX: {
+    bg: "bg-success/10",
+    border: "border-success/55",
+    text: "text-success",
+    ghostBg: "bg-success/20",
+    ghostBorder: "border-success/70",
+  },
 };
 
 function clamp01(n: number): number {
@@ -132,7 +206,13 @@ export function DocumentPdfEditor({
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(720);
+  // Mobile-safe default: starts narrow so the first paint can never render the
+  // PDF canvas wider than its wrapper. The layout effect below corrects this
+  // synchronously before paint on the client. If the canvas were ever drawn
+  // wider than the wrapper, the wrapper's `inline-block max-w-full` would clamp
+  // it and field overlay percentages would drift relative to the visible PDF.
+  const [containerWidth, setContainerWidth] = useState(320);
+  const [containerMeasured, setContainerMeasured] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -167,16 +247,20 @@ export function DocumentPdfEditor({
     [serverFields]
   );
 
-  useEffect(() => {
+  // useLayoutEffect so the measurement runs before paint — the PDF canvas
+  // must be sized correctly on its very first render, not on the next tick.
+  useIsomorphicLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) {
       return;
     }
-    const ro = new ResizeObserver(() => {
+    const measure = (): void => {
       setContainerWidth(Math.max(280, el.clientWidth));
-    });
+      setContainerMeasured(true);
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setContainerWidth(Math.max(280, el.clientWidth));
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -455,18 +539,29 @@ export function DocumentPdfEditor({
             </Button>
             {(Object.keys(FIELD_DEFAULTS) as ApiFieldType[]).map((ft) => {
               const Icon = TOOL_ICONS[ft];
+              const tint = FIELD_TINTS[ft];
               const active = tool === ft;
               return (
                 <Button
                   key={ft}
                   type="button"
-                  variant={active ? "default" : "outline"}
+                  variant="outline"
                   size="sm"
-                  className="gap-1"
+                  className={cn(
+                    "gap-1.5 border-2 transition-colors",
+                    active
+                      ? cn(tint.ghostBg, tint.ghostBorder, tint.text, "shadow-sm")
+                      : "border-border hover:bg-muted"
+                  )}
                   onClick={() => setTool(active ? "select" : ft)}
                   aria-pressed={active}
+                  title={`Place ${FIELD_LABEL[ft].toLowerCase()} field`}
                 >
-                  <Icon className="h-4 w-4" aria-hidden strokeWidth={1.5} />
+                  <Icon
+                    className={cn("h-4 w-4", active ? tint.text : "text-muted-foreground")}
+                    aria-hidden
+                    strokeWidth={1.75}
+                  />
                   <span className="hidden sm:inline">{FIELD_LABEL[ft]}</span>
                 </Button>
               );
@@ -531,7 +626,7 @@ export function DocumentPdfEditor({
         <p className="text-body text-destructive">{pdfLoadError}</p>
       ) : null}
 
-      {pdfUrl && !pdfLoadError && workerReady ? (
+      {pdfUrl && !pdfLoadError && workerReady && containerMeasured ? (
         <div
           className="bg-muted/30 border-border max-h-[min(80vh,900px)] overflow-y-auto overscroll-contain rounded-md border p-3"
           aria-label={
@@ -587,7 +682,11 @@ export function DocumentPdfEditor({
                     {showGhost && ghostDims ? (
                       <div
                         aria-hidden
-                        className="border-primary/70 bg-primary/15 pointer-events-none absolute rounded-sm border-2 border-dashed transition-none"
+                        className={cn(
+                          "pointer-events-none absolute rounded-sm border-2 border-dashed transition-none",
+                          FIELD_TINTS[tool].ghostBorder,
+                          FIELD_TINTS[tool].ghostBg
+                        )}
                         style={{
                           left: `${clamp01(ghost.x - ghostDims.width / 2) * 100}%`,
                           top: `${clamp01(ghost.y - ghostDims.height / 2) * 100}%`,
@@ -600,45 +699,81 @@ export function DocumentPdfEditor({
                       ? null
                       : fields
                       .filter((f) => f.page === pageNumber)
-                      .map((field) => (
-                        <div
-                          key={field.id}
-                          data-field-overlay
-                          role="presentation"
-                          className={cn(
-                            "absolute flex cursor-grab items-start justify-between gap-1 border-2 p-0.5 text-left text-caption active:cursor-grabbing",
-                            "border-primary/60 bg-primary/10 text-primary",
-                            selectedId === field.id &&
-                              "ring-2 ring-ring ring-offset-2"
-                          )}
-                          style={{
-                            left: `${field.x * 100}%`,
-                            top: `${field.y * 100}%`,
-                            width: `${field.width * 100}%`,
-                            height: `${field.height * 100}%`,
-                          }}
-                          onPointerDown={(e) => startDrag(field, e)}
-                        >
-                          <span className="pointer-events-none truncate leading-none">
-                            {FIELD_LABEL[field.type]}
-                          </span>
-                          {!readOnly && tool === "select" && selectedId === field.id ? (
-                            <button
-                              type="button"
-                              data-delete-field
-                              className="pointer-events-auto rounded p-0.5 text-destructive hover:bg-destructive/10"
-                              aria-label="Remove field"
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                removeField(field.id);
-                              }}
-                              onPointerDown={(ev) => ev.stopPropagation()}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                            </button>
-                          ) : null}
-                        </div>
-                      ))}
+                      .map((field) => {
+                        const tint = FIELD_TINTS[field.type];
+                        const Icon = TOOL_ICONS[field.type];
+                        const isSelected = selectedId === field.id;
+                        const isCheckbox = field.type === "CHECKBOX";
+                        return (
+                          <div
+                            key={field.id}
+                            data-field-overlay
+                            role="presentation"
+                            className={cn(
+                              "group absolute flex cursor-grab items-center gap-1 rounded-sm border p-0 text-left text-caption shadow-sm transition-shadow active:cursor-grabbing",
+                              tint.bg,
+                              tint.border,
+                              tint.text,
+                              "hover:shadow-md",
+                              isSelected &&
+                                "ring-ring ring-offset-background border-2 ring-2 ring-offset-2"
+                            )}
+                            style={{
+                              left: `${field.x * 100}%`,
+                              top: `${field.y * 100}%`,
+                              width: `${field.width * 100}%`,
+                              height: `${field.height * 100}%`,
+                            }}
+                            onPointerDown={(e) => startDrag(field, e)}
+                          >
+                            {isCheckbox ? (
+                              <CheckSquare
+                                className="pointer-events-none m-auto h-[70%] w-[70%]"
+                                strokeWidth={1.75}
+                                aria-hidden
+                              />
+                            ) : (
+                              <span className="pointer-events-none flex min-w-0 flex-1 items-center gap-1 px-1 leading-none">
+                                <Icon
+                                  className="h-3 w-3 shrink-0 opacity-80"
+                                  strokeWidth={1.75}
+                                  aria-hidden
+                                />
+                                <span className="truncate font-medium">
+                                  {FIELD_LABEL[field.type]}
+                                </span>
+                              </span>
+                            )}
+                            {field.required ? (
+                              <span
+                                className="bg-destructive pointer-events-none absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full ring-1 ring-background"
+                                aria-label="Required"
+                                title="Required"
+                              />
+                            ) : null}
+                            {!readOnly &&
+                            tool === "select" &&
+                            isSelected ? (
+                              <button
+                                type="button"
+                                data-delete-field
+                                className="text-destructive hover:bg-destructive/10 pointer-events-auto absolute -right-2 -top-2 rounded-full bg-card p-0.5 shadow-sm ring-1 ring-border"
+                                aria-label="Remove field"
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  removeField(field.id);
+                                }}
+                                onPointerDown={(ev) => ev.stopPropagation()}
+                              >
+                                <Trash2
+                                  className="h-3 w-3"
+                                  strokeWidth={1.75}
+                                />
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                   </div>
                 );
               })

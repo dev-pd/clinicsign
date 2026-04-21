@@ -55,6 +55,15 @@ function isValidToken(t: string): boolean {
 }
 
 /**
+ * useLayoutEffect logs a warning during SSR. This shim falls back to
+ * useEffect on the server (no-op anyway since there's no DOM) and uses
+ * useLayoutEffect on the client where we need synchronous-before-paint
+ * measurement of the PDF container.
+ */
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
+
+/**
  * What the field overlay shows on top of the PDF.
  * - Empty: type label + "*" if required (low-emphasis prompt to act).
  * - Filled: the actual value the patient entered, sized to fit the box.
@@ -152,7 +161,13 @@ export function PatientSigningClient({
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const sigPadRef = React.useRef<SignaturePad | null>(null);
 
-  const [pageWidth, setPageWidth] = React.useState(720);
+  // Mobile-safe default: SSR has no DOM to measure, so we start small.
+  // The layout effect below corrects this synchronously before paint on
+  // the client, but if anything ever races we'd rather be too narrow
+  // (and the page rescales up) than too wide (which makes the canvas
+  // overflow its wrapper and shifts field overlay coordinates).
+  const [pageWidth, setPageWidth] = React.useState(320);
+  const [containerMeasured, setContainerMeasured] = React.useState(false);
   const [numPages, setNumPages] = React.useState(0);
   const [workerReady, setWorkerReady] = React.useState(false);
 
@@ -186,7 +201,11 @@ export function PatientSigningClient({
     [serverDefaults, edits]
   );
 
-  React.useEffect(() => {
+  // useLayoutEffect (not useEffect) because we must size the PDF before the
+  // browser paints. Otherwise the first paint uses the SSR default width and
+  // the canvas can render wider than its wrapper, which shifts the field
+  // overlay coordinates (overlays are positioned by % of the wrapper).
+  useIsomorphicLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) {
       return;
@@ -195,7 +214,9 @@ export function PatientSigningClient({
     // scrollbar (~16). Without this the PDF page renders wider than the
     // wrapper's content area and triggers horizontal scrolling.
     const measure = (): void => {
-      setPageWidth(Math.max(280, el.clientWidth - 40));
+      const width = Math.max(280, el.clientWidth - 40);
+      setPageWidth(width);
+      setContainerMeasured(true);
     };
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -522,7 +543,7 @@ export function PatientSigningClient({
                     : "Document"
                 }
               >
-              {!workerReady ? (
+              {!workerReady || !containerMeasured ? (
                 <div className="text-body-lg text-muted-foreground flex items-center gap-2 py-12">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                   Loading PDF…
