@@ -31,7 +31,7 @@ import {
   fetchPresignedDownload,
   patchDocument,
 } from "@/lib/api-client";
-import "@/lib/pdf-worker";
+import { configurePdfJsWorker } from "@/lib/pdf-worker";
 
 // Text/annotation layers are disabled on `<Page>` — no need for Mozilla pdf.js
 // layer CSS (it also adds :root vars and extra chunks). If you turn layers on,
@@ -127,6 +127,7 @@ export function DocumentPdfEditor({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(0);
+  const [workerReady, setWorkerReady] = useState(false);
   const [fields, setFields] = useState<EditorField[]>(() =>
     mapFromApi(serverFields ?? [])
   );
@@ -157,6 +158,21 @@ export function DocumentPdfEditor({
     ro.observe(el);
     setContainerWidth(Math.max(280, el.clientWidth));
     return () => ro.disconnect();
+  }, []);
+
+  // Configure the pdf.js worker on the client before mounting <Document>.
+  // Required because `pdf-worker.ts` no longer auto-invokes on import (that
+  // used to crash SSR of the patient /sign/* route).
+  useEffect(() => {
+    let cancelled = false;
+    void configurePdfJsWorker().then(() => {
+      if (!cancelled) {
+        setWorkerReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -439,7 +455,7 @@ export function DocumentPdfEditor({
         <p className="text-body text-destructive">{pdfLoadError}</p>
       ) : null}
 
-      {pdfUrl && !pdfLoadError ? (
+      {pdfUrl && !pdfLoadError && workerReady ? (
         <Document
           file={pdfUrl}
           loading={
