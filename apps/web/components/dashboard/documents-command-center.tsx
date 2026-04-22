@@ -661,9 +661,14 @@ function FilterBar({
 // `position: sticky`; everything to the right of it scrolls horizontally
 // inside the card. The `pl-6 / pr-6` edge padding lives on the sticky cell
 // itself so it travels with the scroll.
-const STICKY_TITLE = "sticky left-0 z-20 bg-card shadow-[1px_0_0_0_var(--color-border)]";
+// Sticky cells must stay fully opaque while scrolling — shadcn's TableRow
+// uses `hover:bg-muted/50`, which is semi-transparent; if we mirror that on
+// the sticky cell, horizontally scrolling cells bleed through the alpha.
+// Keep the title column at `bg-card` always; row hover lives on the other
+// columns.
+const STICKY_TITLE = "sticky left-0 z-30 bg-card shadow-[1px_0_0_0_var(--color-border)]";
 const STICKY_TITLE_CELL =
-  "sticky left-0 z-10 bg-card group-hover:bg-muted/50 shadow-[1px_0_0_0_var(--color-border)]";
+  "sticky left-0 z-20 bg-card shadow-[1px_0_0_0_var(--color-border)]";
 
 function DocumentsTable({
   docs,
