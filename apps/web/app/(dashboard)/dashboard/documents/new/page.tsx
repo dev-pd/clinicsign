@@ -12,9 +12,7 @@ import {
   FileText,
   Heart,
   Loader2,
-  PenLine,
   Pill,
-  Send,
   ShieldCheck,
   Stethoscope,
 } from "lucide-react";
@@ -136,7 +134,7 @@ export default function NewDocumentPage(): JSX.Element {
 
   return (
     <DashboardShell>
-      <div className="mx-auto max-w-5xl space-y-8">
+      <div className="mx-auto max-w-3xl space-y-8">
         <Link
           href="/dashboard"
           className="text-body-sm text-muted-foreground hover:text-foreground -ml-1 inline-flex items-center gap-1.5 underline-offset-4"
@@ -155,60 +153,63 @@ export default function NewDocumentPage(): JSX.Element {
 
         <Stepper state={stepState} />
 
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]"
-        >
-          <div className="space-y-6">
-            <section className="space-y-3">
-              <SectionHeading
-                eyebrow="Step 1"
-                title="Upload the PDF"
-                description="Drop the file or click to browse. We'll detect the page count automatically."
-              />
-              <PdfDropzone
-                file={file}
-                onFileChange={setFile}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <section className="space-y-3">
+            <SectionHeading
+              eyebrow="Step 1"
+              title="Upload the PDF"
+              description="Drop the file or click to browse. We'll detect the page count automatically."
+            />
+            <PdfDropzone
+              file={file}
+              onFileChange={setFile}
+              disabled={isBusy}
+              inputId="new-doc-pdf"
+            />
+          </section>
+
+          <section className="space-y-3">
+            <SectionHeading
+              eyebrow="Step 2"
+              title="Name it for the patient"
+              description="This title shows up in the signing email's subject and preview."
+            />
+            <div className="space-y-2">
+              <Label htmlFor="title" className="sr-only">
+                Document title
+              </Label>
+              <Input
+                id="title"
+                placeholder="e.g. Intake form — Jane Doe"
+                autoComplete="off"
                 disabled={isBusy}
-                inputId="new-doc-pdf"
+                {...register("title")}
+                aria-invalid={errors.title ? true : undefined}
               />
-            </section>
+              {errors.title ? (
+                <p className="text-destructive text-body-sm" role="alert">
+                  {errors.title.message}
+                </p>
+              ) : null}
+            </div>
+          </section>
 
-            <section className="space-y-3">
-              <SectionHeading
-                eyebrow="Step 2"
-                title="Name it for the patient"
-                description="This title shows up in the signing email's subject and preview."
+          <TemplateChipRow />
+
+          <div className="flex flex-col-reverse items-stretch gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="border-border bg-muted/40 inline-flex items-center gap-2 rounded-md border px-3 py-2">
+              <ShieldCheck
+                className="text-muted-foreground h-4 w-4 shrink-0"
+                strokeWidth={2}
+                aria-hidden
               />
-              <div className="space-y-2">
-                <Label htmlFor="title" className="sr-only">
-                  Document title
-                </Label>
-                <Input
-                  id="title"
-                  placeholder="e.g. Intake form — Jane Doe"
-                  autoComplete="off"
-                  disabled={isBusy}
-                  {...register("title")}
-                  aria-invalid={errors.title ? true : undefined}
-                />
-                {errors.title ? (
-                  <p className="text-destructive text-body-sm" role="alert">
-                    {errors.title.message}
-                  </p>
-                ) : null}
-              </div>
-            </section>
-
-            <TemplateChipRow />
-
-            <div className="flex flex-col-reverse items-stretch gap-3 pt-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={isBusy}
-                asChild
-              >
+              <p className="text-caption text-muted-foreground">
+                <span className="text-foreground font-medium">Private.</span>{" "}
+                PDFs are stored encrypted and only accessible to your clinic.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 sm:justify-end">
+              <Button type="button" variant="ghost" disabled={isBusy} asChild>
                 <Link href="/dashboard">Cancel</Link>
               </Button>
               <Button type="submit" disabled={isBusy || !file}>
@@ -229,48 +230,6 @@ export default function NewDocumentPage(): JSX.Element {
               </Button>
             </div>
           </div>
-
-          <aside className="space-y-4 self-start lg:sticky lg:top-24">
-            <div className="bg-card border-border rounded-lg border p-6 shadow-sm">
-              <div className="text-caption text-muted-foreground font-semibold tracking-wide uppercase">
-                What happens next
-              </div>
-              <ol className="mt-4 space-y-5">
-                <NextStep
-                  step={1}
-                  icon={PenLine}
-                  title="Place fields"
-                  body="Drag signature, text, date, checkbox, and initial fields onto the PDF."
-                />
-                <NextStep
-                  step={2}
-                  icon={Send}
-                  title="Send signing link"
-                  body="Enter the patient's name and email. They sign on any device — no account needed."
-                />
-                <NextStep
-                  step={3}
-                  icon={FileSignature}
-                  title="Get the signed copy"
-                  body="We flatten their entries into the PDF and email a copy to both sides."
-                />
-              </ol>
-            </div>
-
-            <div className="border-border bg-muted/40 rounded-md border px-4 py-3">
-              <div className="flex items-start gap-2">
-                <ShieldCheck
-                  className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0"
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                <p className="text-body-sm text-muted-foreground">
-                  <span className="text-foreground font-medium">Private.</span>{" "}
-                  PDFs are stored encrypted and only accessible to your clinic.
-                </p>
-              </div>
-            </div>
-          </aside>
         </form>
       </div>
     </DashboardShell>
@@ -433,40 +392,6 @@ function SectionHeading({
       <h2 className="text-h4 text-foreground">{title}</h2>
       <p className="text-body-sm text-muted-foreground">{description}</p>
     </div>
-  );
-}
-
-function NextStep({
-  step,
-  icon: Icon,
-  title,
-  body,
-}: {
-  step: number;
-  icon: React.ComponentType<{
-    className?: string;
-    "aria-hidden"?: boolean;
-    strokeWidth?: number;
-  }>;
-  title: string;
-  body: string;
-}): JSX.Element {
-  return (
-    <li className="flex items-start gap-3">
-      <div className="bg-primary/10 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-md">
-        <Icon className="h-4 w-4" strokeWidth={2} aria-hidden />
-      </div>
-      <div>
-        <div className="text-body text-foreground flex items-center gap-2 font-medium">
-          <span className="text-muted-foreground text-caption">
-            Step {step}
-          </span>
-          <span className="bg-border h-1 w-1 rounded-full" aria-hidden />
-          {title}
-        </div>
-        <p className="text-body-sm text-muted-foreground mt-0.5">{body}</p>
-      </div>
-    </li>
   );
 }
 
