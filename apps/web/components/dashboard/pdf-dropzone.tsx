@@ -3,9 +3,30 @@
 import { FileUp, FileText, X } from "lucide-react";
 import * as React from "react";
 
+import { configurePdfJsWorker } from "@/lib/pdf-worker";
 import { cn } from "@/lib/utils";
 
 const MAX_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Reads the number of pages from a PDF file in the browser via pdf.js.
+ * Returns null on any failure (encrypted PDF, malformed bytes, worker
+ * config missing) — callers should render a graceful fallback instead
+ * of treating it as an error.
+ */
+async function readPdfPageCount(file: File): Promise<number | null> {
+  try {
+    await configurePdfJsWorker();
+    const { pdfjs } = await import("react-pdf");
+    const buf = await file.arrayBuffer();
+    const doc = await pdfjs.getDocument({ data: buf }).promise;
+    const count = doc.numPages;
+    await doc.destroy();
+    return count;
+  } catch {
+    return null;
+  }
+}
 
 function isPdfFile(file: File): boolean {
   return (
@@ -45,8 +66,29 @@ export function PdfDropzone({
 }: PdfDropzoneProps): JSX.Element {
   const [isDragging, setIsDragging] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Keyed by `file` identity so that a new file selection immediately
+  // surfaces as "reading" without a synchronous setState inside the
+  // effect (which the React 19 lint rule disallows).
+  const [pageResult, setPageResult] = React.useState<{
+    file: File | null;
+    count: number | null;
+  }>({ file: null, count: null });
   const dragDepth = React.useRef(0);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const isReadingPages = file !== null && pageResult.file !== file;
+  const pageCount = pageResult.file === file ? pageResult.count : null;
+
+  React.useEffect(() => {
+    if (!file) return;
+    let cancelled = false;
+    void readPdfPageCount(file).then((count) => {
+      if (!cancelled) setPageResult({ file, count });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
   function validateAndSet(picked: File | null | undefined): void {
     setError(null);
@@ -121,6 +163,13 @@ export function PdfDropzone({
             </div>
             <div className="text-caption text-muted-foreground mt-1">
               PDF · {formatBytes(file.size)}
+              {isReadingPages ? (
+                <span className="ml-1">· reading…</span>
+              ) : pageCount !== null ? (
+                <span className="ml-1">
+                  · {pageCount} {pageCount === 1 ? "page" : "pages"}
+                </span>
+              ) : null}
             </div>
           </div>
           <button
