@@ -102,35 +102,34 @@ const FALLBACK_VISUAL: EventVisual = {
 };
 
 /**
- * Returns a "5 minutes ago" / "in 2 days" string for an ISO timestamp.
- * Mirrors the helper in documents-command-center.tsx; not promoted to
- * a shared util yet because the two call sites are still small enough
- * that a duplicate is cheaper than a barrel of date helpers.
+ * Full local datetime for an audit entry. Audit trails are precision
+ * artifacts — "2 minutes ago" drifts out of usefulness the moment the
+ * clinician stops looking, and it also hides the exact second two
+ * events happened. We render one absolute line with the zone
+ * abbreviation (e.g. "Apr 22, 2026, 1:30:29 AM PDT") so cross-timezone
+ * reviews (e.g. a compliance request from another region) stay
+ * unambiguous. Falls back cleanly if Intl rejects the locale/zone.
  */
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (!Number.isFinite(then)) {
+const ABSOLUTE_FORMAT: Intl.DateTimeFormatOptions = {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: true,
+  timeZoneName: "short",
+};
+
+function formatAbsoluteLocal(date: Date): string {
+  if (Number.isNaN(date.getTime())) {
     return "—";
   }
-  const diffSec = Math.round((then - Date.now()) / 1000);
-  const abs = Math.abs(diffSec);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-  if (abs < 60) {
-    return rtf.format(diffSec, "second");
+  try {
+    return new Intl.DateTimeFormat(undefined, ABSOLUTE_FORMAT).format(date);
+  } catch {
+    return date.toLocaleString();
   }
-  if (abs < 3600) {
-    return rtf.format(Math.round(diffSec / 60), "minute");
-  }
-  if (abs < 86400) {
-    return rtf.format(Math.round(diffSec / 3600), "hour");
-  }
-  if (abs < 604800) {
-    return rtf.format(Math.round(diffSec / 86400), "day");
-  }
-  if (abs < 2629800) {
-    return rtf.format(Math.round(diffSec / 604800), "week");
-  }
-  return rtf.format(Math.round(diffSec / 2629800), "month");
 }
 
 /**
@@ -241,10 +240,10 @@ export function DocumentActivityTimeline({
               </p>
               <time
                 dateTime={absolute.toISOString()}
-                title={absolute.toLocaleString()}
-                className="text-caption text-muted-foreground mt-1 block"
+                title={absolute.toISOString()}
+                className="text-caption text-muted-foreground mt-1 block tabular-nums"
               >
-                {relativeTime(entry.timestamp)}
+                {formatAbsoluteLocal(absolute)}
               </time>
             </div>
           </li>
