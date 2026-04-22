@@ -7,11 +7,15 @@ import {
   ArrowRight,
   ArrowUpRight,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CircleSlash,
   Clock,
   FileText,
   Flame,
   LayoutTemplate,
   Mail,
+  MoreHorizontal,
   Plus,
   Search,
   Send,
@@ -27,6 +31,21 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,7 +60,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ApiDocumentListItem } from "@/lib/api-types";
-import { ApiError, fetchDocumentsList, resendDocument } from "@/lib/api-client";
+import {
+  ApiError,
+  fetchDocumentsList,
+  resendDocument,
+  voidDocument,
+} from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { DocumentStatus } from "@clinicsign/shared-types";
 
@@ -70,23 +94,33 @@ const STALE_THRESHOLD_MS = 48 * MS_HOUR;
 const EXPIRES_SOON_MS = 7 * MS_DAY;
 
 export type DocumentsCommandCenterProps = {
+  // Kept for future greeting surfaces (toasts, onboarding, etc). The page
+  // header intentionally no longer renders the welcome block — the grid is
+  // the focus, not a greeting.
   welcome: { name: string; clinic: string };
 };
 
-export function DocumentsCommandCenter({
-  welcome,
-}: DocumentsCommandCenterProps): JSX.Element {
+const PAGE_SIZE = 10;
+// Upper bound for the single initial fetch. The grid paginates client-side
+// below this; if a clinic ever crosses 100 docs, switch this to true
+// server pagination (the backend already supports `page`/`limit`).
+const FETCH_LIMIT = 100;
+
+export function DocumentsCommandCenter(
+  _props: DocumentsCommandCenterProps
+): JSX.Element {
   const { getToken, isLoaded } = useAuth();
   const [filter, setFilter] = React.useState<FilterKey>("all");
   const [chip, setChip] = React.useState<ChipKey | null>(null);
   const [query, setQuery] = React.useState("");
+  const [page, setPage] = React.useState(1);
 
   const { data, isPending, error } = useQuery({
-    queryKey: ["documents", 1, 50],
+    queryKey: ["documents", 1, FETCH_LIMIT],
     enabled: isLoaded,
     queryFn: async () => {
       const token = await getToken();
-      return fetchDocumentsList(token, { page: 1, limit: 50 });
+      return fetchDocumentsList(token, { page: 1, limit: FETCH_LIMIT });
     },
   });
 
@@ -114,8 +148,22 @@ export function DocumentsCommandCenter({
     });
   }, [docs, filter, chip, query]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageDocs = useMemo(
+    () =>
+      filteredDocs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filteredDocs, safePage]
+  );
+
+  // Snap back to page 1 whenever the user narrows the list — otherwise
+  // they can end up on a "page" that no longer exists after filtering.
+  React.useEffect(() => {
+    setPage(1);
+  }, [filter, chip, query]);
+
   if (!isLoaded || isPending) {
-    return <CommandCenterSkeleton welcome={welcome} />;
+    return <CommandCenterSkeleton />;
   }
 
   if (error) {
@@ -123,7 +171,7 @@ export function DocumentsCommandCenter({
       error instanceof ApiError ? error.message : "Could not load documents.";
     return (
       <div className="space-y-6">
-        <PageHeader welcome={welcome} />
+        <PageHeader />
         <Card>
           <CardContent className="text-destructive py-6 text-body" role="alert">
             {message}
@@ -136,7 +184,7 @@ export function DocumentsCommandCenter({
   if (!data) {
     return (
       <div className="space-y-6">
-        <PageHeader welcome={welcome} />
+        <PageHeader />
         <Card>
           <CardContent className="text-muted-foreground py-6 text-body">
             No data returned.
@@ -150,7 +198,7 @@ export function DocumentsCommandCenter({
 
   return (
     <div className="space-y-8">
-      <PageHeader welcome={welcome} />
+      <PageHeader />
 
       {isEmpty ? (
         <Card>
@@ -191,7 +239,7 @@ export function DocumentsCommandCenter({
               />
 
               <DocumentsTable
-                docs={filteredDocs}
+                docs={pageDocs}
                 emptyHint={
                   chip || filter !== "all" || query.trim().length > 0
                     ? "No documents match the current filter."
@@ -199,9 +247,17 @@ export function DocumentsCommandCenter({
                 }
               />
 
+              <PaginationFooter
+                page={safePage}
+                totalPages={totalPages}
+                total={filteredDocs.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+
               {data.total > docs.length ? (
-                <p className="text-body-sm text-muted-foreground">
-                  Showing {docs.length} of {data.total}.
+                <p className="text-caption text-muted-foreground">
+                  Showing the {docs.length} most recent of {data.total} documents.
                 </p>
               ) : null}
             </div>
@@ -221,25 +277,11 @@ export function DocumentsCommandCenter({
 // Page header
 // ---------------------------------------------------------------------------
 
-function PageHeader({
-  welcome,
-}: {
-  welcome: { name: string; clinic: string };
-}): JSX.Element {
+function PageHeader(): JSX.Element {
   return (
-    <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-      <div className="space-y-1">
-        <p className="text-caption text-muted-foreground font-semibold tracking-wide uppercase">
-          {welcome.clinic}
-        </p>
-        <h1 className="text-h1 text-foreground">
-          Welcome back, {firstName(welcome.name)}
-        </h1>
-        <p className="text-body text-muted-foreground">
-          Send, sign, and track patient documents.
-        </p>
-      </div>
-      <Button asChild className="self-start md:self-auto">
+    <header className="flex items-center justify-between gap-3">
+      <h1 className="text-h2 text-foreground">Documents</h1>
+      <Button asChild>
         <Link href="/dashboard/documents/new">
           <Plus className="mr-1.5 h-4 w-4" aria-hidden strokeWidth={2} />
           New document
@@ -682,6 +724,7 @@ function DocumentsTable({
 function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
+  const [voidOpen, setVoidOpen] = React.useState(false);
   const lastActivity = lastActivityIso(doc);
   const lastActivityLabel = lastActivity ? relativeTime(lastActivity) : "—";
   const lastActivityFull = lastActivity
@@ -689,6 +732,13 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
     : undefined;
 
   const remindable = doc.status === "SENT" || doc.status === "VIEWED";
+  // HIPAA + audit integrity: we never hard-delete a signed document. Void is
+  // only offered for in-flight/DRAFT docs; after SIGNED/VOIDED/EXPIRED the
+  // record is frozen so the audit trail stays authoritative.
+  const voidable =
+    doc.status === "DRAFT" ||
+    doc.status === "SENT" ||
+    doc.status === "VIEWED";
 
   const resend = useMutation({
     mutationFn: async () => {
@@ -705,6 +755,25 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
     },
     onError: (err) => {
       toast.error("Could not send reminder", {
+        description:
+          err instanceof ApiError ? err.message : "Try again in a moment.",
+      });
+    },
+  });
+
+  const voidMutation = useMutation({
+    mutationFn: async () => {
+      const token = await getToken();
+      return voidDocument(token, doc.id);
+    },
+    onSuccess: () => {
+      toast.success("Document voided");
+      setVoidOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({ queryKey: ["document", doc.id] });
+    },
+    onError: (err) => {
+      toast.error("Could not void document", {
         description:
           err instanceof ApiError ? err.message : "Try again in a moment.",
       });
@@ -759,22 +828,48 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
       </TableCell>
       <TableCell className="pr-6 text-right">
         <div className="inline-flex items-center gap-1">
-          {remindable ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => resend.mutate()}
-              disabled={resend.isPending}
-              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-              aria-label={`Send reminder for ${doc.title}`}
-            >
-              <Mail className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-              <span className="ml-1">
-                {resend.isPending ? "Sending…" : "Remind"}
-              </span>
-            </Button>
-          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                aria-label={`More actions for ${doc.title}`}
+              >
+                <MoreHorizontal className="h-4 w-4" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuItem asChild>
+                <Link href={`/dashboard/documents/${doc.id}`}>
+                  <ArrowUpRight aria-hidden strokeWidth={1.75} />
+                  Open
+                </Link>
+              </DropdownMenuItem>
+              {remindable ? (
+                <DropdownMenuItem
+                  onClick={() => resend.mutate()}
+                  disabled={resend.isPending}
+                >
+                  <Mail aria-hidden strokeWidth={1.75} />
+                  {resend.isPending ? "Sending…" : "Remind recipient"}
+                </DropdownMenuItem>
+              ) : null}
+              {voidable ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setVoidOpen(true)}
+                  >
+                    <CircleSlash aria-hidden strokeWidth={1.75} />
+                    Void document
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Link
             href={`/dashboard/documents/${doc.id}`}
             className="text-muted-foreground group-hover:text-primary inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors"
@@ -783,8 +878,98 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
         </div>
+
+        <Dialog open={voidOpen} onOpenChange={setVoidOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Void this document?</DialogTitle>
+              <DialogDescription>
+                Voiding invalidates the signing link and marks{" "}
+                <span className="text-foreground font-medium">
+                  {doc.title}
+                </span>{" "}
+                as voided. The audit trail is preserved for compliance, but no
+                one will be able to sign it. This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setVoidOpen(false)}
+              >
+                Keep document
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={voidMutation.isPending}
+                onClick={() => voidMutation.mutate()}
+              >
+                {voidMutation.isPending ? "Voiding…" : "Void document"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </TableCell>
     </TableRow>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pagination footer
+// ---------------------------------------------------------------------------
+
+function PaginationFooter({
+  page,
+  totalPages,
+  total,
+  pageSize,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize: number;
+  onPageChange: (next: number) => void;
+}): JSX.Element | null {
+  if (total === 0) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-body-sm text-muted-foreground tabular-nums">
+        Showing {from}–{to} of {total}
+      </p>
+      <div className="inline-flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden />
+          <span className="ml-1 hidden sm:inline">Previous</span>
+        </Button>
+        <span className="text-body-sm text-muted-foreground px-2 tabular-nums">
+          Page {page} of {totalPages}
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          aria-label="Next page"
+        >
+          <span className="mr-1 hidden sm:inline">Next</span>
+          <ChevronRight className="h-4 w-4" aria-hidden />
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -915,14 +1100,10 @@ function TemplatesCard(): JSX.Element {
 // Skeleton
 // ---------------------------------------------------------------------------
 
-function CommandCenterSkeleton({
-  welcome,
-}: {
-  welcome: { name: string; clinic: string };
-}): JSX.Element {
+function CommandCenterSkeleton(): JSX.Element {
   return (
     <div className="space-y-8">
-      <PageHeader welcome={welcome} />
+      <PageHeader />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <Card key={i} className="shadow-sm">
@@ -959,12 +1140,6 @@ function CommandCenterSkeleton({
 // ---------------------------------------------------------------------------
 // Helpers — derivations over the fetched documents list
 // ---------------------------------------------------------------------------
-
-function firstName(full: string): string {
-  const trimmed = full.trim();
-  if (!trimmed) return "there";
-  return trimmed.split(/\s+/)[0] ?? "there";
-}
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
