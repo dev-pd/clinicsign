@@ -506,8 +506,15 @@ export function PatientSigningClient({
         data-audience="patient"
         className="bg-background min-h-screen px-3 pb-32 pt-6 sm:px-4 sm:py-8 md:px-8"
       >
-        <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
-          <header className="space-y-1">
+        {/*
+          Outer column is max-w-5xl so the PDF card can be ~1000px wide on a
+          laptop instead of the previous ~720px (max-w-3xl), matching the
+          clinician editor's "fill the working area" behavior. Header,
+          summary, and submit copy are explicitly clamped back to max-w-3xl
+          so paragraph text stays inside the 60–80ch readability band.
+        */}
+        <div className="mx-auto max-w-5xl space-y-4 sm:space-y-6">
+          <header className="mx-auto max-w-3xl space-y-1">
             <h1 className="text-h2 sm:text-h1 text-foreground">
               {view.document.title}
             </h1>
@@ -517,7 +524,7 @@ export function PatientSigningClient({
           </header>
 
           {view.document.plainSummary ? (
-            <Card className="border-border/80">
+            <Card className="mx-auto max-w-3xl border-border/80">
               <CardHeader className="pb-2">
                 <CardTitle className="text-h4">What you&apos;re signing</CardTitle>
               </CardHeader>
@@ -571,7 +578,15 @@ export function PatientSigningClient({
                         <div
                           key={pageNumber}
                           data-pdf-page-wrap
-                          className="relative block w-full"
+                          // Pin the wrap to the exact pixel width passed to
+                          // <Page>. With just `w-full`, a one-frame lag between
+                          // pageHostRef.clientWidth and the pageWidth state
+                          // during resize lets the wrap be a few px wider than
+                          // the canvas, drifting overlay % positions. Pinning
+                          // matches the editor's behavior and locks the wrap
+                          // and canvas to the same pixel width every paint.
+                          style={{ width: pageWidth }}
+                          className="relative block max-w-full"
                         >
                           <Page
                             pageNumber={pageNumber}
@@ -648,8 +663,10 @@ export function PatientSigningClient({
             </CardContent>
           </Card>
 
-          {/* Inline submit area for desktop / tablet — stays inside flow. */}
-          <div className="hidden sm:flex sm:flex-row sm:justify-end">
+          {/* Inline submit area for desktop / tablet — stays inside flow.
+              Clamped back to max-w-3xl so the button doesn't sit isolated at
+              the far right of a 1024px column on wide screens. */}
+          <div className="mx-auto hidden max-w-3xl sm:flex sm:flex-row sm:justify-end">
             <Button
               type="button"
               size="lg"
@@ -669,13 +686,13 @@ export function PatientSigningClient({
           </div>
 
           {submitHint ? (
-            <p className="text-body text-destructive" role="alert">
+            <p className="text-body text-destructive mx-auto max-w-3xl" role="alert">
               {submitHint}
             </p>
           ) : null}
 
           {completeMut.error ? (
-            <p className="text-body text-destructive" role="alert">
+            <p className="text-body text-destructive mx-auto max-w-3xl" role="alert">
               {completeMut.error instanceof ApiError
                 ? completeMut.error.message
                 : "Could not submit. Please try again."}

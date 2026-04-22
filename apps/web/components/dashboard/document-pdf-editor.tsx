@@ -47,13 +47,17 @@ import { configurePdfJsWorker } from "@/lib/pdf-worker";
 // layer CSS (it also adds :root vars and extra chunks). If you turn layers on,
 // import `react-pdf/dist/Page/TextLayer.css` and `AnnotationLayer.css` here.
 
+// Heights are fractions of page height. On A4 (~842pt) the SIGNATURE box
+// becomes ~50pt — tall enough that a drawn signature rendered with
+// object-contain lands as a real signature, not a flattened pill. INITIAL
+// keeps a tighter aspect (~42pt) since it's typically a 2–3 char monogram.
 const FIELD_DEFAULTS: Record<ApiFieldType, { width: number; height: number }> =
   {
-    SIGNATURE: { width: 0.28, height: 0.035 },
+    SIGNATURE: { width: 0.28, height: 0.06 },
     TEXT: { width: 0.22, height: 0.022 },
     DATE: { width: 0.16, height: 0.022 },
     CHECKBOX: { width: 0.024, height: 0.024 },
-    INITIAL: { width: 0.1, height: 0.028 },
+    INITIAL: { width: 0.1, height: 0.05 },
   };
 
 const FIELD_LABEL: Record<ApiFieldType, string> = {
