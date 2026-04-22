@@ -77,8 +77,24 @@ export type ApiAuditEntry = {
   timestamp: string;
 };
 
+/**
+ * Slim recipient projection returned on the list endpoint. Safe fields only —
+ * omits `tokenHash`, `tokenExpiresAt`, and signing metadata, which are only
+ * available via the scoped detail endpoint.
+ */
+export type ApiListRecipient = {
+  id: string;
+  name: string;
+  email: string;
+  signedAt: string | null;
+};
+
+export type ApiDocumentListItem = ApiDocument & {
+  recipient: ApiListRecipient | null;
+};
+
 export type DocumentsListResponse = {
-  documents: ApiDocument[];
+  documents: ApiDocumentListItem[];
   page: number;
   limit: number;
   total: number;

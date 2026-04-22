@@ -17,11 +17,27 @@ export function objectKeyForOriginalPdf(clinicId: string, documentId: string): s
   return `clinics/${clinicId}/documents/${documentId}/original.pdf`;
 }
 
+/**
+ * Lightweight recipient projection returned with each document on the list
+ * endpoint. Deliberately excludes `tokenHash`, `tokenExpiresAt`, and signing
+ * metadata — those are only exposed through the scoped detail endpoint.
+ */
+export type DocumentListRecipient = {
+  id: string;
+  name: string;
+  email: string;
+  signedAt: Date | null;
+};
+
+export type DocumentListRow = Document & {
+  recipient: DocumentListRecipient | null;
+};
+
 export async function listDocumentsForClinic(
   clinicId: string,
   query: { status?: DocumentStatus; page: number; limit: number }
 ): Promise<{
-  rows: Document[];
+  rows: DocumentListRow[];
   total: number;
 }> {
   const where: Prisma.DocumentWhereInput = { clinicId };
@@ -35,10 +51,26 @@ export async function listDocumentsForClinic(
       orderBy: { updatedAt: "desc" },
       skip,
       take: query.limit,
+      include: {
+        recipients: {
+          take: 1,
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            signedAt: true,
+          },
+        },
+      },
     }),
     prisma.document.count({ where }),
   ]);
-  return { rows, total };
+  const projected: DocumentListRow[] = rows.map(({ recipients, ...doc }) => ({
+    ...doc,
+    recipient: recipients[0] ?? null,
+  }));
+  return { rows: projected, total };
 }
 
 export async function getDocumentScoped(
