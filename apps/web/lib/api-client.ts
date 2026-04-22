@@ -152,6 +152,20 @@ export async function resendDocument(
   return parseApiJson<DocumentDetailResponse>(res);
 }
 
+export async function voidDocument(
+  token: string | null,
+  documentId: string
+): Promise<{ document: ApiDocument }> {
+  const res = await fetch(
+    `${getBrowserApiBaseUrl()}/api/documents/${documentId}`,
+    {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }
+  );
+  return parseApiJson<{ document: ApiDocument }>(res);
+}
+
 export async function fetchPresignedDownload(
   token: string | null,
   documentId: string,

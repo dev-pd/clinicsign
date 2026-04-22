@@ -3,7 +3,22 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, FileText, History } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  CircleSlash,
+  Download,
+  FileText,
+  Hash,
+  History,
+  Mail,
+  MoreHorizontal,
+  PenLine,
+  Send,
+  SquareCheck,
+  Type,
+} from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -19,6 +34,7 @@ import { z } from "zod";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { DocumentActivityTimeline } from "@/components/dashboard/document-activity-timeline";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,13 +43,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -42,16 +51,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type {
+  ApiDocumentField,
+  ApiDocumentRecipient,
+  ApiFieldType,
+} from "@/lib/api-types";
+import type { DocumentStatus } from "@clinicsign/shared-types";
 import {
   ApiError,
   fetchDocumentDetail,
   fetchPresignedDownload,
   resendDocument,
   sendDocument,
+  voidDocument,
 } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 
 /** Prevents a thrown pdf.js / react-pdf error from blanking the whole dashboard shell. */
 class PdfShellErrorBoundary extends Component<
@@ -117,6 +143,7 @@ export function DocumentDetailView({
   const { getToken, isLoaded } = useAuth();
   const queryClient = useQueryClient();
   const [sendOpen, setSendOpen] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: ["document", documentId],
@@ -168,14 +195,28 @@ export function DocumentDetailView({
     },
   });
 
+  const voidMutation = useMutation({
+    mutationFn: async () => {
+      const token = await getToken();
+      return voidDocument(token, documentId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Document voided");
+      setVoidOpen(false);
+    },
+    onError: (err) => {
+      const message =
+        err instanceof ApiError ? err.message : "Could not void document.";
+      toast.error(message);
+    },
+  });
+
   async function handleDownload(type: "original" | "signed"): Promise<void> {
     try {
       const token = await getToken();
-      const { url } = await fetchPresignedDownload(
-        token,
-        documentId,
-        type
-      );
+      const { url } = await fetchPresignedDownload(token, documentId, type);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err) {
       const message =
@@ -194,51 +235,7 @@ export function DocumentDetailView({
   );
 
   if (!isLoaded || detailQuery.isPending) {
-    return (
-      <DashboardShell>
-        <div className="flex flex-col gap-8">
-          <Skeleton className="h-8 w-40" />
-          <div className="space-y-2">
-            <Skeleton className="h-9 max-w-md" />
-            <Skeleton className="h-5 w-56" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Skeleton className="h-10 w-40" />
-            <Skeleton className="h-10 w-40" />
-            <Skeleton className="h-10 w-44" />
-          </div>
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-            <Card className="shadow-sm">
-              <CardHeader>
-                <Skeleton className="h-6 w-28" />
-                <Skeleton className="h-4 w-full max-w-sm" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="aspect-[8.5/11] w-full max-w-2xl rounded-lg" />
-              </CardContent>
-            </Card>
-            <aside className="flex flex-col gap-4">
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <Skeleton className="h-6 w-24" />
-                  <Skeleton className="h-4 w-full" />
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-3/4" />
-                </CardContent>
-              </Card>
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <Skeleton className="h-6 w-20" />
-                  <Skeleton className="h-4 w-full" />
-                </CardHeader>
-              </Card>
-            </aside>
-          </div>
-        </div>
-      </DashboardShell>
-    );
+    return <DetailSkeleton />;
   }
 
   if (detailQuery.error) {
@@ -270,69 +267,32 @@ export function DocumentDetailView({
     );
   }
 
-  const recipient = doc.recipients[0];
+  const recipient: ApiDocumentRecipient | null = doc.recipients[0] ?? null;
+  const hasSignedPdf = Boolean(doc.signedPdfKey);
   const canSend = doc.status === "DRAFT";
   const canResend = doc.status === "SENT" || doc.status === "VIEWED";
-  const hasSignedPdf = Boolean(doc.signedPdfKey);
+  const canVoid =
+    doc.status === "DRAFT" ||
+    doc.status === "SENT" ||
+    doc.status === "VIEWED";
 
   return (
     <DashboardShell>
       <div className="space-y-8">
-        <div>
-          <Button variant="ghost" size="sm" className="-ml-2 mb-4" asChild>
-            <Link href="/dashboard">
-              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden />
-              Back to documents
-            </Link>
-          </Button>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-h1 text-foreground">{doc.title}</h1>
-              <p className="text-body text-muted-foreground mt-1">
-                Updated {new Date(doc.updatedAt).toLocaleString()}
-              </p>
-            </div>
-            <StatusBadge status={doc.status} />
-          </div>
-        </div>
+        <StatusHero doc={doc} recipient={recipient} />
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void handleDownload("original")}
-          >
-            Download original PDF
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!hasSignedPdf}
-            onClick={() => void handleDownload("signed")}
-            title={
-              hasSignedPdf
-                ? undefined
-                : "Available after the patient signs."
-            }
-          >
-            Download signed PDF
-          </Button>
-          {canSend ? (
-            <Button type="button" onClick={() => setSendOpen(true)}>
-              Send for signature
-            </Button>
-          ) : null}
-          {canResend ? (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={resendMutation.isPending}
-              onClick={() => resendMutation.mutate()}
-            >
-              {resendMutation.isPending ? "Sending…" : "Resend invitation"}
-            </Button>
-          ) : null}
-        </div>
+        <ActionToolbar
+          status={doc.status}
+          hasSignedPdf={hasSignedPdf}
+          canSend={canSend}
+          canResend={canResend}
+          canVoid={canVoid}
+          isResending={resendMutation.isPending}
+          onSend={() => setSendOpen(true)}
+          onResend={() => resendMutation.mutate()}
+          onDownload={(type) => void handleDownload(type)}
+          onVoid={() => setVoidOpen(true)}
+        />
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
           <div className="min-w-0 space-y-4">
@@ -363,11 +323,7 @@ export function DocumentDetailView({
                   <CardHeader>
                     <CardTitle>Preview</CardTitle>
                     <CardDescription>
-                      {doc.status === "DRAFT"
-                        ? "Place fields on the PDF, then save. Drag to move fields in Select mode."
-                        : hasSignedPdf
-                        ? "Signed copy with the recipient's entries flattened onto the document."
-                        : "Fields are locked after send. Download PDFs from the actions above."}
+                      {previewDescription(doc.status, hasSignedPdf)}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -407,49 +363,16 @@ export function DocumentDetailView({
           </div>
 
           <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle>Recipient</CardTitle>
-                <CardDescription>
-                  {recipient
-                    ? "Who receives the signing link."
-                    : "No recipient yet — send the document to add one."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-body space-y-1">
-                {recipient ? (
-                  <>
-                    <p>
-                      <span className="text-muted-foreground">Name: </span>
-                      {recipient.name}
-                    </p>
-                    <p>
-                      <span className="text-muted-foreground">Email: </span>
-                      {recipient.email}
-                    </p>
-                    <p>
-                      <span className="text-muted-foreground">Signed: </span>
-                      {recipient.signedAt
-                        ? new Date(recipient.signedAt).toLocaleString()
-                        : "—"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-muted-foreground">—</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle>Fields</CardTitle>
-                <CardDescription>
-                  {doc.fields.length === 0
-                    ? "No fields placed yet. Field placement is coming in a later step."
-                    : `${doc.fields.length} field(s) on this document.`}
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            <RecipientCard
+              recipient={recipient}
+              status={doc.status}
+              canSend={canSend}
+              canResend={canResend}
+              isResending={resendMutation.isPending}
+              onSend={() => setSendOpen(true)}
+              onResend={() => resendMutation.mutate()}
+            />
+            <FieldsBreakdownCard fields={doc.fields} status={doc.status} />
           </aside>
         </div>
 
@@ -509,17 +432,655 @@ export function DocumentDetailView({
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={sendMutation.isPending}
-                >
+                <Button type="submit" disabled={sendMutation.isPending}>
                   {sendMutation.isPending ? "Sending…" : "Send email"}
                 </Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={voidOpen} onOpenChange={setVoidOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Void this document?</DialogTitle>
+              <DialogDescription>
+                Voiding invalidates the signing link and marks the document as
+                voided. Anyone who opens an existing link will see an error.
+                This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setVoidOpen(false)}
+              >
+                Keep document
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={voidMutation.isPending}
+                onClick={() => voidMutation.mutate()}
+              >
+                {voidMutation.isPending ? "Voiding…" : "Void document"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardShell>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Status hero
+// ---------------------------------------------------------------------------
+
+function StatusHero({
+  doc,
+  recipient,
+}: {
+  doc: {
+    title: string;
+    status: DocumentStatus;
+    createdAt: string;
+    sentAt: string | null;
+    signedAt: string | null;
+    voidedAt: string | null;
+    expiresAt: string | null;
+  };
+  recipient: ApiDocumentRecipient | null;
+}): JSX.Element {
+  const subtitle = heroSubtitle(doc.status, recipient);
+  const events = timelineEvents(doc, recipient);
+
+  return (
+    <header className="space-y-5">
+      <Button variant="ghost" size="sm" className="-ml-2" asChild>
+        <Link href="/dashboard">
+          <ArrowLeft className="mr-2 h-4 w-4" aria-hidden />
+          Back to documents
+        </Link>
+      </Button>
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 space-y-2">
+          <div className="flex items-center gap-3">
+            <StatusBadge status={doc.status} />
+            <span className="text-caption text-muted-foreground">
+              Updated {relativeTime(doc.voidedAt ?? doc.signedAt ?? doc.sentAt ?? doc.createdAt)}
+            </span>
+          </div>
+          <h1 className="text-h1 text-foreground truncate">{doc.title}</h1>
+          <p className="text-body text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+
+      {events.length > 0 ? (
+        <ul className="text-caption flex flex-wrap items-center gap-x-4 gap-y-2">
+          {events.map((event, idx) => (
+            <li key={event.label} className="flex items-center gap-2">
+              {idx > 0 ? (
+                <span
+                  className="text-muted-foreground/40"
+                  aria-hidden
+                >
+                  ·
+                </span>
+              ) : null}
+              <span className="text-muted-foreground">{event.label}</span>
+              <time
+                dateTime={event.iso}
+                title={new Date(event.iso).toLocaleString()}
+                className="text-foreground/80 font-medium"
+              >
+                {relativeTime(event.iso)}
+              </time>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </header>
+  );
+}
+
+function heroSubtitle(
+  status: DocumentStatus,
+  recipient: ApiDocumentRecipient | null
+): string {
+  if (status === "DRAFT") {
+    return "Place fields, then send this document for signature.";
+  }
+  if (status === "SIGNED" && recipient) {
+    return `Signed by ${recipient.name}.`;
+  }
+  if (status === "VOIDED") {
+    return "This document has been voided. The signing link is no longer valid.";
+  }
+  if (status === "EXPIRED") {
+    return "The signing link expired before it was signed. Resend to issue a fresh link.";
+  }
+  if (recipient) {
+    return status === "VIEWED"
+      ? `${recipient.name} opened the link but hasn't signed yet.`
+      : `Awaiting signature from ${recipient.name}.`;
+  }
+  return "Waiting on the next step.";
+}
+
+function timelineEvents(
+  doc: {
+    createdAt: string;
+    sentAt: string | null;
+    signedAt: string | null;
+    voidedAt: string | null;
+  },
+  recipient: ApiDocumentRecipient | null
+): Array<{ label: string; iso: string }> {
+  const out: Array<{ label: string; iso: string }> = [
+    { label: "Created", iso: doc.createdAt },
+  ];
+  if (doc.sentAt) {
+    out.push({ label: "Sent", iso: doc.sentAt });
+  }
+  // Viewed timestamp isn't modeled directly; fallback to created-after-sent
+  // signal. We only emit it when the status is VIEWED or later and we have
+  // a signedAt-or-void timestamp to bracket it. (Intentionally kept out of
+  // the strip to avoid misleading precision.)
+  if (doc.signedAt) {
+    const signer = recipient?.name ?? "Recipient";
+    out.push({ label: `Signed by ${signer}`, iso: doc.signedAt });
+  }
+  if (doc.voidedAt) {
+    out.push({ label: "Voided", iso: doc.voidedAt });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Action toolbar
+// ---------------------------------------------------------------------------
+
+function ActionToolbar({
+  status,
+  hasSignedPdf,
+  canSend,
+  canResend,
+  canVoid,
+  isResending,
+  onSend,
+  onResend,
+  onDownload,
+  onVoid,
+}: {
+  status: DocumentStatus;
+  hasSignedPdf: boolean;
+  canSend: boolean;
+  canResend: boolean;
+  canVoid: boolean;
+  isResending: boolean;
+  onSend: () => void;
+  onResend: () => void;
+  onDownload: (type: "original" | "signed") => void;
+  onVoid: () => void;
+}): JSX.Element {
+  // Primary action is chosen to match the most common next step for each
+  // status. Secondary actions live behind the overflow menu to keep the
+  // page focused.
+  let primary: JSX.Element;
+  if (canSend) {
+    primary = (
+      <Button type="button" onClick={onSend}>
+        <Send className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+        Send for signature
+      </Button>
+    );
+  } else if (canResend) {
+    primary = (
+      <Button type="button" onClick={onResend} disabled={isResending}>
+        <Mail className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+        {isResending ? "Sending…" : "Resend invitation"}
+      </Button>
+    );
+  } else if (status === "SIGNED" && hasSignedPdf) {
+    primary = (
+      <Button type="button" onClick={() => onDownload("signed")}>
+        <Download className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+        Download signed PDF
+      </Button>
+    );
+  } else {
+    primary = (
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => onDownload("original")}
+      >
+        <Download className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+        Download original PDF
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {primary}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="More actions"
+          >
+            <MoreHorizontal className="h-4 w-4" aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-56">
+          <DropdownMenuItem onClick={() => onDownload("original")}>
+            <Download aria-hidden strokeWidth={1.75} />
+            Download original PDF
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onDownload("signed")}
+            disabled={!hasSignedPdf}
+          >
+            <Download aria-hidden strokeWidth={1.75} />
+            Download signed PDF
+            {!hasSignedPdf ? (
+              <span className="text-muted-foreground ml-auto text-caption">
+                After signing
+              </span>
+            ) : null}
+          </DropdownMenuItem>
+          {canResend ? (
+            <DropdownMenuItem onClick={onResend} disabled={isResending}>
+              <Mail aria-hidden strokeWidth={1.75} />
+              {isResending ? "Sending…" : "Resend invitation"}
+            </DropdownMenuItem>
+          ) : null}
+          {canVoid ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={onVoid}
+              >
+                <CircleSlash aria-hidden strokeWidth={1.75} />
+                Void document
+              </DropdownMenuItem>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recipient card
+// ---------------------------------------------------------------------------
+
+function RecipientCard({
+  recipient,
+  status,
+  canSend,
+  canResend,
+  isResending,
+  onSend,
+  onResend,
+}: {
+  recipient: ApiDocumentRecipient | null;
+  status: DocumentStatus;
+  canSend: boolean;
+  canResend: boolean;
+  isResending: boolean;
+  onSend: () => void;
+  onResend: () => void;
+}): JSX.Element {
+  if (!recipient) {
+    return (
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle>Recipient</CardTitle>
+          <CardDescription>
+            No recipient yet — send the document to add one.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            onClick={onSend}
+            disabled={!canSend}
+            className="w-full"
+          >
+            <Send className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+            Send for signature
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const statusLine = recipientStatusLine(recipient, status);
+  const expiresLine = tokenExpiresLine(recipient, status);
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle>Recipient</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-start gap-3">
+          <Avatar size="lg">
+            <AvatarFallback>{initials(recipient.name)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="text-body text-foreground truncate font-medium">
+              {recipient.name}
+            </p>
+            <a
+              href={`mailto:${recipient.email}`}
+              className="text-body-sm text-muted-foreground hover:text-primary truncate underline-offset-4 hover:underline"
+            >
+              {recipient.email}
+            </a>
+          </div>
+        </div>
+
+        <dl className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-caption text-muted-foreground">Status</dt>
+            <dd className="text-body-sm text-foreground text-right">
+              {statusLine}
+            </dd>
+          </div>
+          {expiresLine ? (
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-caption text-muted-foreground">Link</dt>
+              <dd className="text-body-sm text-foreground text-right">
+                {expiresLine}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+
+        {canResend ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={onResend}
+            disabled={isResending}
+          >
+            <Mail className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+            {isResending ? "Sending…" : "Resend invitation"}
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function recipientStatusLine(
+  recipient: ApiDocumentRecipient,
+  status: DocumentStatus
+): string {
+  if (recipient.signedAt) {
+    return `Signed ${relativeTime(recipient.signedAt)}`;
+  }
+  if (status === "VIEWED") {
+    return "Opened the link, not signed yet";
+  }
+  if (status === "SENT") {
+    return "Awaiting signature";
+  }
+  if (status === "VOIDED") {
+    return "Invitation voided";
+  }
+  if (status === "EXPIRED") {
+    return "Invitation expired";
+  }
+  return "Not sent";
+}
+
+function tokenExpiresLine(
+  recipient: ApiDocumentRecipient,
+  status: DocumentStatus
+): string | null {
+  if (recipient.signedAt) return null;
+  if (status !== "SENT" && status !== "VIEWED") return null;
+  const expires = new Date(recipient.tokenExpiresAt).getTime();
+  if (!Number.isFinite(expires)) return null;
+  if (expires <= Date.now()) return "Link has expired";
+  return `Expires ${relativeTime(recipient.tokenExpiresAt)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Fields breakdown card
+// ---------------------------------------------------------------------------
+
+const FIELD_META: Record<
+  ApiFieldType,
+  { label: string; icon: typeof PenLine }
+> = {
+  SIGNATURE: { label: "Signatures", icon: PenLine },
+  INITIAL: { label: "Initials", icon: Hash },
+  TEXT: { label: "Text fields", icon: Type },
+  DATE: { label: "Dates", icon: Calendar },
+  CHECKBOX: { label: "Checkboxes", icon: SquareCheck },
+};
+
+const FIELD_ORDER: ApiFieldType[] = [
+  "SIGNATURE",
+  "INITIAL",
+  "TEXT",
+  "DATE",
+  "CHECKBOX",
+];
+
+function FieldsBreakdownCard({
+  fields,
+  status,
+}: {
+  fields: ApiDocumentField[];
+  status: DocumentStatus;
+}): JSX.Element {
+  const total = fields.length;
+  const required = fields.filter((f) => f.required).length;
+  const filled = fields.filter((f) => f.value !== null && f.value !== "").length;
+  const pages = new Set(fields.map((f) => f.page)).size;
+  const byType = new Map<ApiFieldType, number>();
+  for (const f of fields) {
+    byType.set(f.type, (byType.get(f.type) ?? 0) + 1);
+  }
+
+  const hasFields = total > 0;
+  const showProgress = status === "SIGNED" || status === "VIEWED" || status === "SENT";
+  const progressPct = total === 0 ? 0 : Math.round((filled / total) * 100);
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle>Fields</CardTitle>
+        <CardDescription>
+          {hasFields
+            ? `${total} field${total === 1 ? "" : "s"} across ${pages} page${pages === 1 ? "" : "s"}.`
+            : status === "DRAFT"
+              ? "Drag field types onto the PDF to get started."
+              : "No fields were placed on this document."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {hasFields && showProgress ? (
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-caption text-muted-foreground">
+                Captured
+              </span>
+              <span className="text-caption text-foreground font-medium tabular-nums">
+                {filled} / {total}
+                {status === "SIGNED" ? (
+                  <CheckCircle2
+                    className="text-success ml-1.5 inline h-3.5 w-3.5"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                ) : null}
+              </span>
+            </div>
+            <div
+              className="bg-muted mt-1.5 h-1.5 w-full overflow-hidden rounded-full"
+              role="progressbar"
+              aria-valuenow={progressPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Fields captured"
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  status === "SIGNED" ? "bg-success" : "bg-primary"
+                )}
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {hasFields ? (
+          <ul className="space-y-2">
+            {FIELD_ORDER.map((type) => {
+              const count = byType.get(type) ?? 0;
+              if (count === 0) return null;
+              const meta = FIELD_META[type];
+              const Icon = meta.icon;
+              return (
+                <li
+                  key={type}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <span className="text-body-sm text-foreground inline-flex items-center gap-2">
+                    <Icon
+                      className="text-muted-foreground h-3.5 w-3.5"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    {meta.label}
+                  </span>
+                  <span className="text-body-sm text-muted-foreground tabular-nums">
+                    {count}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        {hasFields && required > 0 ? (
+          <p className="text-caption text-muted-foreground">
+            {required} required · {total - required} optional
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton
+// ---------------------------------------------------------------------------
+
+function DetailSkeleton(): JSX.Element {
+  return (
+    <DashboardShell>
+      <div className="flex flex-col gap-8">
+        <Skeleton className="h-8 w-40" />
+        <div className="space-y-2">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-9 max-w-md" />
+          <Skeleton className="h-5 w-56" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-10 w-40" />
+          <Skeleton className="h-10 w-10" />
+        </div>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <Skeleton className="h-6 w-28" />
+              <Skeleton className="h-4 w-full max-w-sm" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="aspect-[8.5/11] w-full max-w-2xl rounded-lg" />
+            </CardContent>
+          </Card>
+          <aside className="flex flex-col gap-4">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <Skeleton className="h-6 w-24" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardHeader>
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-4 w-full" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+      </div>
+    </DashboardShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
+  return (first + last).toUpperCase() || "?";
+}
+
+function previewDescription(
+  status: DocumentStatus,
+  hasSignedPdf: boolean
+): string {
+  if (status === "DRAFT") {
+    return "Place fields on the PDF, then save. Drag to move fields in Select mode.";
+  }
+  if (hasSignedPdf) {
+    return "Signed copy with the recipient's entries flattened onto the document.";
+  }
+  return "Fields are locked after send. Download the PDF from the overflow menu.";
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "—";
+  const diffSec = Math.round((then - Date.now()) / 1000);
+  const abs = Math.abs(diffSec);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  if (abs < 60) return rtf.format(diffSec, "second");
+  if (abs < 3600) return rtf.format(Math.round(diffSec / 60), "minute");
+  if (abs < 86400) return rtf.format(Math.round(diffSec / 3600), "hour");
+  if (abs < 604800) return rtf.format(Math.round(diffSec / 86400), "day");
+  if (abs < 2629800) return rtf.format(Math.round(diffSec / 604800), "week");
+  return rtf.format(Math.round(diffSec / 2629800), "month");
 }
