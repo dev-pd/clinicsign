@@ -362,15 +362,7 @@ export function DocumentDetailView({
               onDownload={(type) => void handleDownload(type)}
               onVoid={() => setVoidOpen(true)}
             />
-            <RecipientCard
-              recipient={recipient}
-              status={doc.status}
-              canSend={canSend}
-              canResend={canResend}
-              isResending={resendMutation.isPending}
-              onSend={() => setSendOpen(true)}
-              onResend={() => resendMutation.mutate()}
-            />
+            <RecipientCard recipient={recipient} status={doc.status} />
             <FieldsBreakdownCard fields={doc.fields} status={doc.status} />
           </aside>
         </div>
@@ -516,10 +508,13 @@ function OverviewCard({
     doc.voidedAt ?? doc.signedAt ?? doc.sentAt ?? doc.createdAt;
 
   // Primary action mirrors the most common next step for each status.
+  // `flex-1 min-w-0` so the button shares the row with the overflow icon
+  // button instead of forcing it past the card's right edge.
+  const primaryClass = "flex-1 min-w-0";
   let primary: JSX.Element;
   if (canSend) {
     primary = (
-      <Button type="button" className="w-full" onClick={onSend}>
+      <Button type="button" className={primaryClass} onClick={onSend}>
         <Send className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
         Send for signature
       </Button>
@@ -528,7 +523,7 @@ function OverviewCard({
     primary = (
       <Button
         type="button"
-        className="w-full"
+        className={primaryClass}
         onClick={onResend}
         disabled={isResending}
       >
@@ -540,7 +535,7 @@ function OverviewCard({
     primary = (
       <Button
         type="button"
-        className="w-full"
+        className={primaryClass}
         onClick={() => onDownload("signed")}
       >
         <Download className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
@@ -552,7 +547,7 @@ function OverviewCard({
       <Button
         type="button"
         variant="outline"
-        className="w-full"
+        className={primaryClass}
         onClick={() => onDownload("original")}
       >
         <Download className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
@@ -584,6 +579,7 @@ function OverviewCard({
                 type="button"
                 variant="outline"
                 size="icon"
+                className="shrink-0"
                 aria-label="More actions"
               >
                 <MoreHorizontal className="h-4 w-4" aria-hidden />
@@ -708,45 +704,25 @@ function timelineEvents(
 // Recipient card
 // ---------------------------------------------------------------------------
 
+/**
+ * Recipient card is only rendered once a recipient exists. The
+ * no-recipient zero-state lived here before, but it just restated the
+ * Overview card's subtitle + primary action — two cards asking the same
+ * thing. Overview now owns that state; this card is purely for
+ * displaying real recipient details.
+ *
+ * Similarly, the "Resend invitation" button that used to live at the
+ * bottom duplicated Overview's primary action for SENT/VIEWED. Dropped.
+ */
 function RecipientCard({
   recipient,
   status,
-  canSend,
-  canResend,
-  isResending,
-  onSend,
-  onResend,
 }: {
   recipient: ApiDocumentRecipient | null;
   status: DocumentStatus;
-  canSend: boolean;
-  canResend: boolean;
-  isResending: boolean;
-  onSend: () => void;
-  onResend: () => void;
-}): JSX.Element {
+}): JSX.Element | null {
   if (!recipient) {
-    return (
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle>Recipient</CardTitle>
-          <CardDescription>
-            No recipient yet — send the document to add one.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            type="button"
-            onClick={onSend}
-            disabled={!canSend}
-            className="w-full"
-          >
-            <Send className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
-            Send for signature
-          </Button>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   const statusLine = recipientStatusLine(recipient, status);
@@ -791,19 +767,6 @@ function RecipientCard({
             </div>
           ) : null}
         </dl>
-
-        {canResend ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={onResend}
-            disabled={isResending}
-          >
-            <Mail className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
-            {isResending ? "Sending…" : "Resend invitation"}
-          </Button>
-        ) : null}
       </CardContent>
     </Card>
   );
