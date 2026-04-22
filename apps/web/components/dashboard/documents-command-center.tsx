@@ -13,9 +13,9 @@ import {
   Clock,
   FileText,
   Flame,
+  Info,
   LayoutTemplate,
   Mail,
-  MoreHorizontal,
   Plus,
   Search,
   Send,
@@ -28,7 +28,6 @@ import * as React from "react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
@@ -39,13 +38,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -198,6 +190,7 @@ export function DocumentsCommandCenter(
 
   return (
     <div className="space-y-8">
+      <RoadmapNotice />
       <PageHeader />
 
       {isEmpty ? (
@@ -273,6 +266,22 @@ export function DocumentsCommandCenter(
   );
 }
 
+
+function RoadmapNotice(): JSX.Element {
+  return (
+    <div
+      role="note"
+      className="flex items-start gap-3 rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100"
+    >
+      <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden strokeWidth={1.75} />
+      <p className="text-body-sm leading-relaxed">
+        A recipient-centric view is coming soon — you&apos;ll be able to filter
+        and drill into a single patient&apos;s documents in one place. For now,
+        recipient details live on each document&apos;s detail page.
+      </p>
+    </div>
+  );
+}
 
 function PageHeader(): JSX.Element {
   return (
@@ -685,17 +694,11 @@ function DocumentsTable({
             <TableRow>
               <TableHead
                 className={cn(
-                  "text-caption text-muted-foreground pl-6 min-w-[280px]",
+                  "text-caption text-muted-foreground pl-6 min-w-[320px]",
                   STICKY_TITLE
                 )}
               >
                 Title
-              </TableHead>
-              <TableHead className="text-caption text-muted-foreground min-w-[200px]">
-                Recipient
-              </TableHead>
-              <TableHead className="text-caption text-muted-foreground min-w-[240px]">
-                Email
               </TableHead>
               <TableHead className="text-caption text-muted-foreground min-w-[140px]">
                 Status
@@ -704,7 +707,7 @@ function DocumentsTable({
                 Last activity
               </TableHead>
               <TableHead
-                className="pr-6 text-right min-w-[104px]"
+                className="pr-6 text-right min-w-[280px]"
                 aria-label="Actions"
               />
             </TableRow>
@@ -713,7 +716,7 @@ function DocumentsTable({
             {docs.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={4}
                   className="text-muted-foreground py-12 text-center text-body"
                 >
                   {emptyHint}
@@ -789,7 +792,7 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
   return (
     <TableRow className="group">
       <TableCell
-        className={cn("pl-6 text-body-sm min-w-[280px]", STICKY_TITLE_CELL)}
+        className={cn("pl-6 text-body-sm min-w-[320px]", STICKY_TITLE_CELL)}
         title={doc.title}
       >
         <Link
@@ -804,39 +807,6 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
           <span className="truncate">{doc.title}</span>
         </Link>
       </TableCell>
-      <TableCell className="min-w-[200px]">
-        {doc.recipient ? (
-          <div className="flex min-w-0 items-center gap-2">
-            <Avatar size="sm">
-              <AvatarFallback>{initials(doc.recipient.name)}</AvatarFallback>
-            </Avatar>
-            <span
-              className="text-body-sm text-foreground truncate"
-              title={doc.recipient.name}
-            >
-              {doc.recipient.name}
-            </span>
-          </div>
-        ) : (
-          <span className="text-muted-foreground text-body-sm">—</span>
-        )}
-      </TableCell>
-      <TableCell
-        className="text-body-sm text-muted-foreground min-w-[240px]"
-        title={doc.recipient?.email ?? undefined}
-      >
-        {doc.recipient ? (
-          <a
-            href={`mailto:${doc.recipient.email}`}
-            className="hover:text-foreground truncate underline-offset-4 hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {doc.recipient.email}
-          </a>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </TableCell>
       <TableCell className="min-w-[140px]">
         <StatusBadge status={doc.status} />
       </TableCell>
@@ -849,57 +819,49 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
           {lastActivityLabel}
         </span>
       </TableCell>
-      <TableCell className="pr-6 text-right min-w-[104px]">
-        <div className="inline-flex items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-                aria-label={`More actions for ${doc.title}`}
-              >
-                <MoreHorizontal className="h-4 w-4" aria-hidden />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-52">
-              <DropdownMenuItem asChild>
-                <Link href={`/dashboard/documents/${doc.id}`}>
-                  <ArrowUpRight aria-hidden strokeWidth={1.75} />
-                  Open
-                </Link>
-              </DropdownMenuItem>
-              {remindable ? (
-                <DropdownMenuItem
-                  onClick={() => resend.mutate()}
-                  disabled={resend.isPending}
-                >
-                  <Mail aria-hidden strokeWidth={1.75} />
-                  {resend.isPending ? "Sending…" : "Remind recipient"}
-                </DropdownMenuItem>
-              ) : null}
-              {voidable ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => setVoidOpen(true)}
-                  >
-                    <CircleSlash aria-hidden strokeWidth={1.75} />
-                    Void document
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Link
-            href={`/dashboard/documents/${doc.id}`}
-            className="text-muted-foreground group-hover:text-primary inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors"
-            aria-label={`Open ${doc.title}`}
+      <TableCell className="pr-6 text-right min-w-[280px]">
+        <div className="inline-flex items-center gap-1.5">
+          <Button
+            asChild
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2.5 text-body-sm"
           >
-            <ArrowRight className="h-4 w-4" aria-hidden />
-          </Link>
+            <Link
+              href={`/dashboard/documents/${doc.id}`}
+              aria-label={`Open ${doc.title}`}
+            >
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden strokeWidth={1.75} />
+              Open
+            </Link>
+          </Button>
+          {remindable ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2.5 text-body-sm"
+              onClick={() => resend.mutate()}
+              disabled={resend.isPending}
+              aria-label={`Remind recipient for ${doc.title}`}
+            >
+              <Mail className="h-3.5 w-3.5" aria-hidden strokeWidth={1.75} />
+              {resend.isPending ? "Sending…" : "Remind"}
+            </Button>
+          ) : null}
+          {voidable ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 px-2.5 text-body-sm"
+              onClick={() => setVoidOpen(true)}
+              aria-label={`Void ${doc.title}`}
+            >
+              <CircleSlash className="h-3.5 w-3.5" aria-hidden strokeWidth={1.75} />
+              Void
+            </Button>
+          ) : null}
         </div>
 
         <Dialog open={voidOpen} onOpenChange={setVoidOpen}>
@@ -1151,14 +1113,6 @@ function CommandCenterSkeleton(): JSX.Element {
   );
 }
 
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
-  return (first + last).toUpperCase() || "?";
-}
 
 function lastActivityIso(d: ApiDocumentListItem): string | null {
   return d.signedAt ?? d.sentAt ?? d.updatedAt ?? d.createdAt ?? null;
