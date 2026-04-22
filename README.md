@@ -1,5 +1,7 @@
 # ClinicSign
 
+> **Heads up:** this was built as a demo, so there are architecture shortcomings I'm aware of and consciously deferred — synchronous PDF rendering, in-memory rate limiting, inline task-definition secrets, no metrics/traces yet, among others. It's a work in progress, and the roadmap for hardening it is tracked in [`docs/BACKEND_IMPROVEMENT_PLAN.md`](./docs/BACKEND_IMPROVEMENT_PLAN.md).
+
 HIPAA-aware document signing for small medical practices. Real AWS, real auth, real PDFs, real audit trail.
 
 Clinicians upload a PDF, drag signature / date / initial fields onto it, and email it to a patient. The patient signs in a browser — no account, no app, one tap on mobile — and a signed PDF lands in both inboxes. Everything in between is observable, tokenized, and encrypted under a customer-managed KMS key.
