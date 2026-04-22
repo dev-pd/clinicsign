@@ -56,15 +56,6 @@ function isValidToken(t: string): boolean {
 }
 
 /**
- * useLayoutEffect logs a warning during SSR. This shim falls back to
- * useEffect on the server (no-op anyway since there's no DOM) and uses
- * useLayoutEffect on the client where we need synchronous-before-paint
- * measurement of the PDF container.
- */
-const useIsomorphicLayoutEffect =
-  typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
-
-/**
  * What the field overlay shows on top of the PDF.
  * - Empty: type label + "*" if required (low-emphasis prompt to act).
  * - Filled: the actual value the patient entered, sized to fit the box.
@@ -158,17 +149,12 @@ type PatientSigningClientProps = {
 export function PatientSigningClient({
   token,
 }: PatientSigningClientProps): React.ReactElement | null {
-  // Direct ref on the unpadded measurement div inside the scroll wrapper.
-  // We size pageWidth to this exact clientWidth so the wrap and the canvas
-  // are always the same pixel width, which keeps field overlay % coords
-  // perfectly aligned with the visible PDF (no estimating padding/scrollbar).
-  const pageHostRef = React.useRef<HTMLDivElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const sigPadRef = React.useRef<SignaturePad | null>(null);
 
   // Mobile-safe default: SSR has no DOM to measure, so we start small.
-  // The layout effect below replaces this with the actual measurement
-  // of pageHostRef on the client.
+  // The callback ref below replaces this with the actual measurement
+  // as soon as the host div attaches to the DOM.
   const [pageWidth, setPageWidth] = React.useState(320);
   const [numPages, setNumPages] = React.useState(0);
   const [workerReady, setWorkerReady] = React.useState(false);
@@ -203,24 +189,36 @@ export function PatientSigningClient({
     [serverDefaults, edits]
   );
 
-  // useLayoutEffect runs synchronously before paint, so the first paint can
-  // use the real measured width. We measure pageHostRef directly (an unpadded
-  // div that's the actual containing block of every PDF page wrap), so
-  // pageWidth = wrap width by construction — no padding/scrollbar arithmetic.
-  useIsomorphicLayoutEffect(() => {
-    const el = pageHostRef.current;
-    if (!el) {
-      return;
-    }
-    const measure = (): void => {
-      const width = Math.max(280, el.clientWidth);
-      setPageWidth(width);
-    };
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    measure();
-    return () => ro.disconnect();
-  }, []);
+  /**
+   * Callback ref on the unpadded measurement host. We use a callback ref
+   * (not useRef + useLayoutEffect) because the host mounts conditionally
+   * — only after viewQuery resolves and the PDF card renders. A
+   * useLayoutEffect with an empty deps array runs ONCE at component
+   * mount, when the host hasn't attached yet, returning early; it never
+   * re-runs when the host eventually attaches, so pageWidth would stay
+   * pinned to the useState default forever (proven by the ?debug=1
+   * inspector showing wrap=320px on a 1500px laptop).
+   *
+   * Callback refs fire whenever the element attaches or detaches from
+   * the DOM, regardless of when in the lifecycle that happens. React 19
+   * supports returning a cleanup function from a callback ref, which we
+   * use to disconnect the ResizeObserver on detach.
+   */
+  const setPageHost = React.useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!el) {
+        return;
+      }
+      const measure = (): void => {
+        setPageWidth(Math.max(280, el.clientWidth));
+      };
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      measure();
+      return () => ro.disconnect();
+    },
+    []
+  );
 
   // Configure the pdf.js worker lazily on the client. Keeping this out of
   // module scope prevents pdfjs-dist's browser-only top-level code from
@@ -554,15 +552,13 @@ export function PatientSigningClient({
                 }
               >
               {/*
-                pageHostRef MUST live outside the workerReady conditional.
-                The layout effect that measures el.clientWidth runs once on
-                mount; if the host is hidden behind a `workerReady` ternary
-                it doesn't exist yet, the ref is null, and the ResizeObserver
-                never attaches. pageWidth then stays stuck at the
-                useState(320) default forever — the PDF renders at a tiny
-                fixed 320px even on a 1500px laptop.
+                Callback-ref measurement host. setPageHost fires whenever
+                this div attaches/detaches; we measure clientWidth on
+                attach and observe further changes via ResizeObserver.
+                See setPageHost above for why a callback ref is required
+                instead of useRef + useLayoutEffect.
               */}
-              <div ref={pageHostRef} className="w-full">
+              <div ref={setPageHost} className="w-full">
               {!workerReady ? (
                 <div className="text-body-lg text-muted-foreground flex items-center gap-2 py-12">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />

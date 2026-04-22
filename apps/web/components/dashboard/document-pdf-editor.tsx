@@ -13,18 +13,8 @@ import {
   Type,
   UserRound,
 } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
-
-const useIsomorphicLayoutEffect =
-  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 import { Button } from "@/components/ui/button";
 import {
@@ -209,13 +199,9 @@ export function DocumentPdfEditor({
 }: DocumentPdfEditorProps): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
-  // Direct ref on the unpadded measurement div inside the scroll wrapper.
-  // We size pageWidth = pageHostRef.clientWidth so the page wrap and the
-  // canvas always share the exact same pixel width — that's what keeps
-  // field overlay % positions perfectly aligned with the visible PDF.
-  const pageHostRef = useRef<HTMLDivElement>(null);
-  // Mobile-safe default for SSR (no DOM). The layout effect below replaces
-  // this with the real measurement before the first paint on the client.
+  // Mobile-safe default for SSR (no DOM). The callback ref on the host
+  // div replaces this with the real measurement as soon as the host
+  // attaches to the DOM (see setPageHost below).
   const [containerWidth, setContainerWidth] = useState(320);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoadError, setPdfLoadError] = useState<string | null>(null);
@@ -251,12 +237,18 @@ export function DocumentPdfEditor({
     [serverFields]
   );
 
-  // useLayoutEffect so the measurement runs before paint — the PDF canvas
-  // must be sized correctly on its very first render, not on the next tick.
-  // We measure pageHostRef (an unpadded host div that's the actual containing
-  // block of every page wrap) so containerWidth = wrap width by construction.
-  useIsomorphicLayoutEffect(() => {
-    const el = pageHostRef.current;
+  /**
+   * Callback ref for the unpadded measurement host. We use a callback
+   * ref (not useRef + useLayoutEffect) because the host can mount in
+   * later renders — e.g. after pdfUrl/workerReady transitions — and
+   * useLayoutEffect with [] deps only fires once at component mount.
+   * If the host weren't attached at that exact moment the effect would
+   * short-circuit and never re-run, leaving containerWidth pinned to
+   * the useState default. Callback refs fire on every attach/detach,
+   * and React 19 supports returning a cleanup function for the
+   * ResizeObserver.
+   */
+  const setPageHost = useCallback((el: HTMLDivElement | null) => {
     if (!el) {
       return;
     }
@@ -650,7 +642,7 @@ export function DocumentPdfEditor({
               : "PDF preview"
           }
         >
-        <div ref={pageHostRef} className="w-full">
+        <div ref={setPageHost} className="w-full">
         {pdfUrl && workerReady ? (
         <Document
           file={pdfUrl}
