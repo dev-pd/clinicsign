@@ -278,31 +278,23 @@ export function DocumentDetailView({
 
   return (
     <DashboardShell>
-      <div className="space-y-8">
-        <StatusHero doc={doc} recipient={recipient} />
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" className="-ml-2" asChild>
+          <Link href="/dashboard">
+            <ArrowLeft className="mr-2 h-4 w-4" aria-hidden />
+            Back to documents
+          </Link>
+        </Button>
 
-        <ActionToolbar
-          status={doc.status}
-          hasSignedPdf={hasSignedPdf}
-          canSend={canSend}
-          canResend={canResend}
-          canVoid={canVoid}
-          isResending={resendMutation.isPending}
-          onSend={() => setSendOpen(true)}
-          onResend={() => resendMutation.mutate()}
-          onDownload={(type) => void handleDownload(type)}
-          onVoid={() => setVoidOpen(true)}
-        />
-
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-          <div className="min-w-0 space-y-4">
-            {/*
-              forceMount on both TabsContent keeps the PDF editor
-              instance mounted while the user toggles to the Activity
-              tab — switching back doesn't trigger a refetch of the
-              presigned PDF URL or wipe in-progress field edits in
-              DRAFT mode. Hidden state is driven by Radix's data-state.
-            */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          {/*
+            Left column hosts only the PDF. Tabs sit above the editor so
+            the Activity timeline gets the same full-width canvas.
+            forceMount keeps the editor instance warm across tab toggles
+            so switching to Activity doesn't refetch the presigned URL
+            or wipe in-progress field edits in DRAFT mode.
+          */}
+          <div className="min-w-0">
             <Tabs defaultValue="preview" className="w-full">
               <TabsList variant="line" className="w-full justify-start">
                 <TabsTrigger value="preview">
@@ -320,13 +312,7 @@ export function DocumentDetailView({
                 className="data-[state=inactive]:hidden"
               >
                 <Card className="shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Preview</CardTitle>
-                    <CardDescription>
-                      {previewDescription(doc.status, hasSignedPdf)}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-6">
                     <PdfShellErrorBoundary key={pdfEditorKey}>
                       <DocumentPdfEditor
                         documentId={documentId}
@@ -362,7 +348,20 @@ export function DocumentDetailView({
             </Tabs>
           </div>
 
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+            <OverviewCard
+              doc={doc}
+              recipient={recipient}
+              hasSignedPdf={hasSignedPdf}
+              canSend={canSend}
+              canResend={canResend}
+              canVoid={canVoid}
+              isResending={resendMutation.isPending}
+              onSend={() => setSendOpen(true)}
+              onResend={() => resendMutation.mutate()}
+              onDownload={(type) => void handleDownload(type)}
+              onVoid={() => setVoidOpen(true)}
+            />
             <RecipientCard
               recipient={recipient}
               status={doc.status}
@@ -475,12 +474,21 @@ export function DocumentDetailView({
 }
 
 // ---------------------------------------------------------------------------
-// Status hero
+// Overview card (title + status + timeline + primary action)
 // ---------------------------------------------------------------------------
 
-function StatusHero({
+function OverviewCard({
   doc,
   recipient,
+  hasSignedPdf,
+  canSend,
+  canResend,
+  canVoid,
+  isResending,
+  onSend,
+  onResend,
+  onDownload,
+  onVoid,
 }: {
   doc: {
     title: string;
@@ -492,57 +500,154 @@ function StatusHero({
     expiresAt: string | null;
   };
   recipient: ApiDocumentRecipient | null;
+  hasSignedPdf: boolean;
+  canSend: boolean;
+  canResend: boolean;
+  canVoid: boolean;
+  isResending: boolean;
+  onSend: () => void;
+  onResend: () => void;
+  onDownload: (type: "original" | "signed") => void;
+  onVoid: () => void;
 }): JSX.Element {
   const subtitle = heroSubtitle(doc.status, recipient);
   const events = timelineEvents(doc, recipient);
+  const updatedIso =
+    doc.voidedAt ?? doc.signedAt ?? doc.sentAt ?? doc.createdAt;
+
+  // Primary action mirrors the most common next step for each status.
+  let primary: JSX.Element;
+  if (canSend) {
+    primary = (
+      <Button type="button" className="w-full" onClick={onSend}>
+        <Send className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+        Send for signature
+      </Button>
+    );
+  } else if (canResend) {
+    primary = (
+      <Button
+        type="button"
+        className="w-full"
+        onClick={onResend}
+        disabled={isResending}
+      >
+        <Mail className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+        {isResending ? "Sending…" : "Resend invitation"}
+      </Button>
+    );
+  } else if (doc.status === "SIGNED" && hasSignedPdf) {
+    primary = (
+      <Button
+        type="button"
+        className="w-full"
+        onClick={() => onDownload("signed")}
+      >
+        <Download className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+        Download signed PDF
+      </Button>
+    );
+  } else {
+    primary = (
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => onDownload("original")}
+      >
+        <Download className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
+        Download original PDF
+      </Button>
+    );
+  }
 
   return (
-    <header className="space-y-5">
-      <Button variant="ghost" size="sm" className="-ml-2" asChild>
-        <Link href="/dashboard">
-          <ArrowLeft className="mr-2 h-4 w-4" aria-hidden />
-          Back to documents
-        </Link>
-      </Button>
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-2">
-          <div className="flex items-center gap-3">
-            <StatusBadge status={doc.status} />
-            <span className="text-caption text-muted-foreground">
-              Updated {relativeTime(doc.voidedAt ?? doc.signedAt ?? doc.sentAt ?? doc.createdAt)}
-            </span>
-          </div>
-          <h1 className="text-h1 text-foreground truncate">{doc.title}</h1>
-          <p className="text-body text-muted-foreground">{subtitle}</p>
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <StatusBadge status={doc.status} />
+          <span className="text-caption text-muted-foreground">
+            Updated {relativeTime(updatedIso)}
+          </span>
         </div>
-      </div>
-
-      {events.length > 0 ? (
-        <ul className="text-caption flex flex-wrap items-center gap-x-4 gap-y-2">
-          {events.map((event, idx) => (
-            <li key={event.label} className="flex items-center gap-2">
-              {idx > 0 ? (
-                <span
-                  className="text-muted-foreground/40"
-                  aria-hidden
-                >
-                  ·
-                </span>
-              ) : null}
-              <span className="text-muted-foreground">{event.label}</span>
-              <time
-                dateTime={event.iso}
-                title={new Date(event.iso).toLocaleString()}
-                className="text-foreground/80 font-medium"
+        <CardTitle className="text-h3 mt-2 break-words leading-tight">
+          {doc.title}
+        </CardTitle>
+        <CardDescription className="break-words">{subtitle}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-0">
+        <div className="flex items-center gap-2">
+          {primary}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="More actions"
               >
-                {relativeTime(event.iso)}
-              </time>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </header>
+                <MoreHorizontal className="h-4 w-4" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-56">
+              <DropdownMenuItem onClick={() => onDownload("original")}>
+                <Download aria-hidden strokeWidth={1.75} />
+                Download original PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onDownload("signed")}
+                disabled={!hasSignedPdf}
+              >
+                <Download aria-hidden strokeWidth={1.75} />
+                Download signed PDF
+                {!hasSignedPdf ? (
+                  <span className="text-muted-foreground ml-auto text-caption">
+                    After signing
+                  </span>
+                ) : null}
+              </DropdownMenuItem>
+              {canResend ? (
+                <DropdownMenuItem onClick={onResend} disabled={isResending}>
+                  <Mail aria-hidden strokeWidth={1.75} />
+                  {isResending ? "Sending…" : "Resend invitation"}
+                </DropdownMenuItem>
+              ) : null}
+              {canVoid ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onClick={onVoid}>
+                    <CircleSlash aria-hidden strokeWidth={1.75} />
+                    Void document
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {events.length > 0 ? (
+          <ul className="space-y-1.5 border-t pt-3">
+            {events.map((event) => (
+              <li
+                key={event.label}
+                className="text-caption flex items-center justify-between gap-3"
+              >
+                <span className="text-muted-foreground truncate">
+                  {event.label}
+                </span>
+                <time
+                  dateTime={event.iso}
+                  title={new Date(event.iso).toLocaleString()}
+                  className="text-foreground/80 shrink-0 font-medium"
+                >
+                  {relativeTime(event.iso)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -597,126 +702,6 @@ function timelineEvents(
     out.push({ label: "Voided", iso: doc.voidedAt });
   }
   return out;
-}
-
-// ---------------------------------------------------------------------------
-// Action toolbar
-// ---------------------------------------------------------------------------
-
-function ActionToolbar({
-  status,
-  hasSignedPdf,
-  canSend,
-  canResend,
-  canVoid,
-  isResending,
-  onSend,
-  onResend,
-  onDownload,
-  onVoid,
-}: {
-  status: DocumentStatus;
-  hasSignedPdf: boolean;
-  canSend: boolean;
-  canResend: boolean;
-  canVoid: boolean;
-  isResending: boolean;
-  onSend: () => void;
-  onResend: () => void;
-  onDownload: (type: "original" | "signed") => void;
-  onVoid: () => void;
-}): JSX.Element {
-  // Primary action is chosen to match the most common next step for each
-  // status. Secondary actions live behind the overflow menu to keep the
-  // page focused.
-  let primary: JSX.Element;
-  if (canSend) {
-    primary = (
-      <Button type="button" onClick={onSend}>
-        <Send className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
-        Send for signature
-      </Button>
-    );
-  } else if (canResend) {
-    primary = (
-      <Button type="button" onClick={onResend} disabled={isResending}>
-        <Mail className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
-        {isResending ? "Sending…" : "Resend invitation"}
-      </Button>
-    );
-  } else if (status === "SIGNED" && hasSignedPdf) {
-    primary = (
-      <Button type="button" onClick={() => onDownload("signed")}>
-        <Download className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
-        Download signed PDF
-      </Button>
-    );
-  } else {
-    primary = (
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => onDownload("original")}
-      >
-        <Download className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
-        Download original PDF
-      </Button>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {primary}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="More actions"
-          >
-            <MoreHorizontal className="h-4 w-4" aria-hidden />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-56">
-          <DropdownMenuItem onClick={() => onDownload("original")}>
-            <Download aria-hidden strokeWidth={1.75} />
-            Download original PDF
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => onDownload("signed")}
-            disabled={!hasSignedPdf}
-          >
-            <Download aria-hidden strokeWidth={1.75} />
-            Download signed PDF
-            {!hasSignedPdf ? (
-              <span className="text-muted-foreground ml-auto text-caption">
-                After signing
-              </span>
-            ) : null}
-          </DropdownMenuItem>
-          {canResend ? (
-            <DropdownMenuItem onClick={onResend} disabled={isResending}>
-              <Mail aria-hidden strokeWidth={1.75} />
-              {isResending ? "Sending…" : "Resend invitation"}
-            </DropdownMenuItem>
-          ) : null}
-          {canVoid ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={onVoid}
-              >
-                <CircleSlash aria-hidden strokeWidth={1.75} />
-                Void document
-              </DropdownMenuItem>
-            </>
-          ) : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -996,28 +981,27 @@ function FieldsBreakdownCard({
 function DetailSkeleton(): JSX.Element {
   return (
     <DashboardShell>
-      <div className="flex flex-col gap-8">
+      <div className="space-y-4">
         <Skeleton className="h-8 w-40" />
-        <div className="space-y-2">
-          <Skeleton className="h-6 w-32" />
-          <Skeleton className="h-9 max-w-md" />
-          <Skeleton className="h-5 w-56" />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Skeleton className="h-10 w-40" />
-          <Skeleton className="h-10 w-10" />
-        </div>
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
           <Card className="shadow-sm">
-            <CardHeader>
-              <Skeleton className="h-6 w-28" />
-              <Skeleton className="h-4 w-full max-w-sm" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="aspect-[8.5/11] w-full max-w-2xl rounded-lg" />
+            <CardContent className="pt-6">
+              <Skeleton className="aspect-[8.5/11] w-full rounded-lg" />
             </CardContent>
           </Card>
           <aside className="flex flex-col gap-4">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-7 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </CardContent>
+            </Card>
             <Card className="shadow-sm">
               <CardHeader>
                 <Skeleton className="h-6 w-24" />
@@ -1026,17 +1010,6 @@ function DetailSkeleton(): JSX.Element {
                 <Skeleton className="h-10 w-10 rounded-full" />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-3/4" />
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm">
-              <CardHeader>
-                <Skeleton className="h-6 w-20" />
-                <Skeleton className="h-4 w-full" />
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-4 w-1/2" />
               </CardContent>
             </Card>
           </aside>
@@ -1056,19 +1029,6 @@ function initials(name: string): string {
   const first = parts[0]?.[0] ?? "";
   const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
   return (first + last).toUpperCase() || "?";
-}
-
-function previewDescription(
-  status: DocumentStatus,
-  hasSignedPdf: boolean
-): string {
-  if (status === "DRAFT") {
-    return "Place fields on the PDF, then save. Drag to move fields in Select mode.";
-  }
-  if (hasSignedPdf) {
-    return "Signed copy with the recipient's entries flattened onto the document.";
-  }
-  return "Fields are locked after send. Download the PDF from the overflow menu.";
 }
 
 function relativeTime(iso: string): string {
