@@ -1,7 +1,8 @@
 # `apps/web` — ClinicSign frontend
 
-> Next.js 16 App Router · React 19 · Tailwind v4 · shadcn/ui · Clerk · react-pdf.
-> Two audiences in one app: the clinician who creates the document and the patient who signs it. Both flows run in the same codebase; neither compromises the other.
+Next.js 16 App Router, React 19, Tailwind v4, shadcn/ui, Clerk, react-pdf.
+
+Two audiences in one app: the clinician who creates the document and the patient who signs it. Both flows run in the same codebase and share the same design tokens.
 
 ---
 
@@ -101,11 +102,11 @@ apps/web/
 
 ### Patient side (unauthenticated, `/sign/:token`)
 
-The anti-thesis of a SaaS onboarding flow. No account, no password, no app.
+No account, no password, no app.
 
-- Token validated server-side before render; graceful copy for *expired / invalidated / already-signed* (non-destructive, even celebratory for the last)
-- PDF renders **full width on mobile and desktop** (the `pageWidth` ResizeObserver bug that pinned width to 320px is dead — see the callback-ref comment in `patient-signing-client.tsx` if you care)
-- Field overlays are percentage-positioned relative to the PDF canvas; the one-frame drift between CSS width and canvas width is pinned away via `style={{ width: pageWidth }}`
+- Token validated server-side before render; distinct copy for *expired / invalidated / already-signed* (the last is non-destructive and shows the signed PDF)
+- PDF renders full width on mobile and desktop. The `pageWidth` is measured via a callback ref + `ResizeObserver` so the host element is definitely attached at measurement time.
+- Field overlays are percentage-positioned relative to the PDF canvas; the one-frame drift between CSS width and canvas width is pinned via `style={{ width: pageWidth }}`
 - **Progress bar** above the PDF: `X of Y complete`, live
 - **"Sign here" pulsing pill** on the next unfilled required field (rendered as a sibling to the button because the button has `overflow-hidden` to clip long TEXT values — children would be clipped)
 - **Auto-scroll** to the next unfilled field after saving; on submit-click with anything unfilled, scroll-to-first-missing
@@ -116,11 +117,11 @@ The anti-thesis of a SaaS onboarding flow. No account, no password, no app.
 
 ---
 
-## Subtle things that took a while to get right
+## Implementation notes
 
-A handful of things in this app were not obvious from the outside, and took real work to settle:
+A handful of things in this app are non-obvious from the outside:
 
-1. **PDF width measurement via callback ref, not `useLayoutEffect`.** The measurement host mounts *after* the `useQuery` resolves. A `useLayoutEffect` with empty deps runs once at mount, the host is still `null`, returns early, never re-runs. Callback refs fire on attach/detach regardless of when in the lifecycle that happens. React 19 supports returning a cleanup function from a callback ref — we use it to disconnect the `ResizeObserver`. Look for `setPageHost` in the signing client.
+1. **PDF width measurement via callback ref, not `useLayoutEffect`.** The measurement host mounts *after* the `useQuery` resolves. A `useLayoutEffect` with empty deps runs once at mount, finds the host still `null`, returns early, and never re-runs. Callback refs fire on attach/detach regardless of when in the lifecycle that happens. React 19 supports returning a cleanup function from a callback ref — we use it to disconnect the `ResizeObserver`. See `setPageHost` in the signing client.
 
 2. **Field overlay `min-height` exclusion.** Our global `[data-audience="patient"] button` rule forces `min-height: 44px` for accessibility. Without an exclusion, every field overlay was being stretched to 44px regardless of its stored percentage height, bleeding fields into each other on mobile. Solution: `[data-field-overlay]` is opted out of the rule.
 

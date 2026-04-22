@@ -1,19 +1,17 @@
 # ClinicSign
 
-> HIPAA-aware document signing for small medical practices.
-> A production-shaped vertical slice — real AWS, real auth, real PDFs, real audit trail.
+HIPAA-aware document signing for small medical practices. Real AWS, real auth, real PDFs, real audit trail.
 
-Clinicians upload a PDF, drag signature / date / initial fields onto it, and email it to a patient. The patient signs in a browser — no account, no app, one tap on mobile — and a cryptographically signed PDF lands in both inboxes. Everything in between is observable, tokenized, and locked behind a KMS-encrypted key you control.
+Clinicians upload a PDF, drag signature / date / initial fields onto it, and email it to a patient. The patient signs in a browser — no account, no app, one tap on mobile — and a signed PDF lands in both inboxes. Everything in between is observable, tokenized, and encrypted under a customer-managed KMS key.
 
 ---
 
-## Demo
+## Where it runs
 
-| | |
+| Component | URL |
 |---|---|
-| Web (Vercel) | `https://<your-vercel-project>.vercel.app` |
-| API (CloudFront → ALB → ECS Fargate) | `https://<your-cloudfront>.cloudfront.net` |
-| Monorepo | `npm install && npm run dev` |
+| Web | Vercel (`apps/web`, Next.js 16) |
+| API | AWS CloudFront → ALB → ECS Fargate (`apps/api`, Express + Prisma) |
 
 ---
 
@@ -70,21 +68,15 @@ clinicsign/
 └── docker-compose.yml   optional local API container (data is always RDS)
 ```
 
-Each `apps/*/README.md` is self-contained — you can read either one without having to read the other.
-
 ---
 
-## The five things this demo proves
+## What's notable
 
-1. **You can reason about a real stack, not just a framework.** VPC perimeters, IAM boundaries, KMS envelope encryption, CloudFront-as-TLS-shim, single-NAT tradeoffs — every one of those decisions is written down somewhere in [`infra/ARCHITECTURE.md`](./infra/ARCHITECTURE.md) with the *why*, not just the *what*.
-
-2. **Patients don't need an account.** The signing token is a 32-byte random string. Raw in the URL, SHA-256 hashed in the DB, 7-day TTL, single-use. That's it. No passwordless-link library, no OAuth, no session. Signature lives entirely in the email.
-
-3. **The PDF pipeline isn't a library call.** On upload, the PDF goes to S3 (KMS-encrypted, versioned). On signing, the API pulls the original, overlays patient field values with pdf-lib, uploads the signed PDF under a different key, and emails presigned download URLs to both parties. Everything is in `apps/api/src/services/`.
-
-4. **The audit log is append-only and in Postgres.** Not a log file, not CloudWatch. `AuditLog` has no `update` or `delete` in the codebase; the model is locked. Every interesting event (`DOCUMENT_SENT`, `DOCUMENT_VIEWED`, `DOCUMENT_SIGNED`, `DOCUMENT_VOIDED`…) writes a row. Display it in the UI, query it from SQL, prove to a regulator who touched what.
-
-5. **The UI takes the patient seriously.** The signing flow runs on a phone (min 280px wide), progress bar, pulsing "Sign here" pill on the next unfilled field, auto-scroll, disabled-until-ready submit, iOS safe-area respected. The clinician flow gets grid-snap + alignment guides, client-side pagination, absolute-local timestamps on every audit row, and a PDF-first two-column detail page. Details in [`apps/web/README.md`](./apps/web/README.md).
+- **No account for the patient.** The signing link carries a 32-byte random token — raw in the URL, SHA-256-hashed in the DB, single-use, 7-day TTL. No passwordless-link library, no OAuth, no session.
+- **PDF pipeline is first-class.** Upload writes to S3 (KMS-encrypted, versioned). Signing pulls the original, overlays patient values with `pdf-lib`, writes the signed PDF under a different key prefix, and emails presigned download URLs to both parties. Pure JS — no native deps, runs in Fargate as-is. See `apps/api/src/services/`.
+- **Audit log is append-only, in Postgres.** Not a log file, not CloudWatch. `AuditLog` has no `update`/`delete` call sites in the codebase; every interesting event (`DOCUMENT_SENT`, `DOCUMENT_VIEWED`, `DOCUMENT_SIGNED`, `DOCUMENT_VOIDED`, …) is a row you can display in the UI or query from SQL.
+- **Private by default.** ECS tasks and RDS have no public IP. The only things on the public internet are Vercel, CloudFront, the ALB, and a NAT Gateway for egress. RDS uses `sslmode=require` even though the path is private.
+- **The patient flow works on a phone.** Progress bar, pulsing "next field" pill, auto-scroll to the next required field, disabled-until-ready submit, iOS safe-area respected, field overlays percentage-positioned relative to the PDF canvas so they track the page at any width. Details in [`apps/web/README.md`](./apps/web/README.md).
 
 ---
 
@@ -98,13 +90,13 @@ Each `apps/*/README.md` is self-contained — you can read either one without ha
 | Forms / state | React Hook Form + Zod + TanStack Query | Same Zod schemas client ↔ server |
 | PDF | `react-pdf` (view) + `pdf-lib` (render) | Pure-JS, no native deps, works in Fargate |
 | Signature | `signature_pad` | ~5 KB, mobile-friendly, DPR-aware |
-| Backend | Node 22 + Express + TypeScript | Boring is correct here |
-| Auth | Clerk (clinician) + 256-bit signed tokens (patient) | Free tier covers auth; patients don't need accounts |
+| Backend | Node 22 + Express + TypeScript | Small surface, boring, well-understood |
+| Auth | Clerk (clinician) + 256-bit signed tokens (patient) | Clerk handles clinician auth; patients don't need accounts |
 | DB | PostgreSQL 16 + Prisma | Typed migrations, real FK constraints |
 | Storage | S3 + KMS CMK | HIPAA-eligible, versioned, encrypted |
-| Email | Resend | Cleanest DX for transactional; SES wired for prod BAA |
+| Email | Resend | Good transactional DX; SES is wired for the BAA path |
 | Logs | Pino (structured JSON) + pino-http | Correlates requests end-to-end |
-| Infra | Pulumi TypeScript | Imperative is easier to reason about than HCL for a 700-line program |
+| Infra | Pulumi TypeScript | Same language as the app; easier to reason about than HCL for this size |
 | Deploy | Vercel (web) + ECR → ECS Fargate + ALB + CloudFront (API) | HTTPS without buying a domain |
 
 ---
@@ -143,24 +135,11 @@ cd infra && AWS_PROFILE=clinicsign pulumi destroy
 
 ---
 
-## Repo stats
+## Security & HIPAA
 
-| | |
-|---|---|
-| Commits on `master` | 60+ |
-| TypeScript LOC (app + infra) | ~9,300 |
-| Cursor rules | 12 files under `.cursor/rules/` |
-| Prisma models | 6 (User, Clinic, Document, DocumentField, DocumentRecipient, AuditLog) |
-| Audit event types | 10 |
-| Patient signing flow dependencies | `react-pdf`, `signature_pad` — nothing else |
+The architecture targets HIPAA-eligible services and technical controls. The deployment is **not HIPAA-certified** — certification is an organizational process (BAAs with AWS and Clerk, SOC 2, breach procedures, operational training) that sits on top of the technical work and is out of scope here. Details in [`PROJECT.md`](./PROJECT.md) and [`infra/ARCHITECTURE.md`](./infra/ARCHITECTURE.md).
 
----
-
-## HIPAA stance (read before demoing)
-
-The architecture targets HIPAA-eligible services and controls. **The deployment is not HIPAA-certified** because certification requires BAAs (with AWS and Clerk), SOC 2, breach procedures, and operational training — organizational work this demo deliberately omits. Details in [`PROJECT.md`](./PROJECT.md) and [`infra/ARCHITECTURE.md`](./infra/ARCHITECTURE.md).
-
-Technical controls present today:
+Technical controls in place today:
 
 - PHI encrypted at rest (S3 + RDS) under a **customer-managed KMS key** with rotation enabled
 - PHI encrypted in transit (TLS 1.2+ end-to-end; `sslmode=require` to RDS)
@@ -188,4 +167,4 @@ Technical controls present today:
 
 ## License
 
-Private / take-home use unless you add a license.
+All rights reserved.

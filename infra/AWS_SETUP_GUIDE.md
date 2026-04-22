@@ -1,11 +1,10 @@
 # ClinicSign — AWS + Pulumi setup guide
 
-> The walkthrough. From "I have an AWS account" (or none) to "the API is live on a HTTPS URL and Vercel is talking to it".
-> For the *why* behind the architecture, read **[`ARCHITECTURE.md`](./ARCHITECTURE.md)**.
+Walkthrough: from "I have an AWS account" (or none) to "the API is live on an HTTPS URL and Vercel is talking to it". For the *why* behind the architecture, read **[`ARCHITECTURE.md`](./ARCHITECTURE.md)**.
 
 **Target architecture:** **Vercel** hosts the Next.js app (`apps/web`). **AWS** hosts the API (Docker image in **ECR**, run on **ECS Fargate** behind an **ALB**, fronted by **CloudFront** for HTTPS), plus **RDS PostgreSQL**, **S3**, **KMS**, and **IAM** — all provisioned via **Pulumi** under **`infra/`**.
 
-Honest take: standing up AWS adds time on top of the app. Do it **after** Phase 1 works locally. Don't let infra block features.
+Standing up AWS adds real time on top of app work. Do it after the app runs locally; don't let infra block features.
 
 ---
 
@@ -57,7 +56,7 @@ Then immediately:
 2. **Billing alarm** (e.g. `$5` cap): Billing → preferences → enable billing alerts; CloudWatch → alarm on estimated charges.
 3. **Stop using root** for daily work — create an admin IAM user next.
 
-> **Reality check on Free Tier**: NAT Gateway, RDS, ALB and ECS uptime, and data transfer can bill even at low traffic. **`pulumi destroy`** when experiments are done.
+> **Free Tier caveat**: NAT Gateway, RDS, ALB, ECS uptime, and data transfer bill even at low traffic. Run `pulumi destroy` when you're not actively using the stack.
 
 ---
 
@@ -300,12 +299,3 @@ Use **billing alarms** and `pulumi destroy` what you don't need. See [`ARCHITECT
 
 These are listed in [`ARCHITECTURE.md` §11](./ARCHITECTURE.md#11-what-id-change-for-prod) as the prod path.
 
----
-
-## What reviewers should see
-
-1. Root **`README.md`** explains setup and deploy shape
-2. **`infra/`** contains Pulumi TypeScript for the AWS resources
-3. **`apps/api/Dockerfile`** is production-oriented (multi-stage)
-4. Live **Vercel** URL + **HTTPS API** on AWS
-5. **`infra/ARCHITECTURE.md`** explains *why* — the trust boundaries, the IAM scopes, the failure modes already encountered

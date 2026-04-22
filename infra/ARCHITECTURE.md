@@ -1,7 +1,6 @@
 # ClinicSign — infrastructure architecture
 
-> Companion to **[`AWS_SETUP_GUIDE.md`](./AWS_SETUP_GUIDE.md)** (the setup walkthrough).
-> This document is the *mental model*: every resource, why it exists, where the trust boundaries are, and what would change for production. Source of truth is **`infra/src/index.ts`** (~770 lines of Pulumi TypeScript).
+Companion to **[`AWS_SETUP_GUIDE.md`](./AWS_SETUP_GUIDE.md)** (the setup walkthrough). This document covers every resource, why it exists, where the trust boundaries are, and what would change for production. Source of truth is **`infra/src/index.ts`**.
 
 ---
 
@@ -105,7 +104,7 @@ const apiEnvSecret     = config.getSecretObject<...>("apiEnvSecret"); // encrypt
 | `apiEnv.*` | no | plain env vars in the ECS task definition |
 | `apiEnvSecret.*` | **yes** | encrypted in Pulumi state, injected as plain env at task-definition render time (not via Secrets Manager — yet) |
 
-> **Trade-off, written down honestly.** Today secrets sit in the rendered task definition, visible to anyone with `ecs:DescribeTaskDefinition`. The prod path is `containerDefinitions[].secrets` backed by AWS Secrets Manager / SSM. Listed in §11.
+> **Trade-off.** Today secrets sit in the rendered task definition, visible to anyone with `ecs:DescribeTaskDefinition`. The prod path is `containerDefinitions[].secrets` backed by AWS Secrets Manager / SSM. Listed in §11.
 
 ---
 
@@ -337,8 +336,6 @@ Why CloudFront for an API:
 | ECS → Resend / Clerk JWKS | NAT egress → public internet | API key / public JWKS | TLS |
 | Patient browser → S3 (presigned URL) | public internet | URL-bound HMAC, 5-min TTL (signing view) or 7-day TTL (post-sign download in email) | TLS |
 
-If a single piece of paper had to summarise the security posture, this table is it.
-
 ---
 
 ## 11. What I'd change for prod
@@ -373,13 +370,13 @@ None of these change application code; they're all in `infra/src/index.ts`.
 | CloudWatch Logs (14d) | < $1 |
 | **Total** | **~$80** |
 
-NAT is the biggest single line item. VPC endpoints for S3/ECR/Logs cut it materially in production; for a demo we just `pulumi destroy` when the lights go out.
+NAT is the biggest single line item. VPC endpoints for S3/ECR/CloudWatch Logs cut it materially in production; for a dev stack, `pulumi destroy` when you're not using it.
 
 ---
 
 ## 13. The end-to-end deploy lifecycle
 
-A "release" today is three commands, each one understood:
+A release today is three commands:
 
 ```bash
 # 1) Build for x86 (Fargate is amd64; mac default is arm64)
@@ -447,4 +444,4 @@ Requires Graphviz: `brew install graphviz`.
 
 - **[`AWS_SETUP_GUIDE.md`](./AWS_SETUP_GUIDE.md)** — AWS account setup, Pulumi bootstrap, Vercel + ECS wiring, end-to-end first deploy
 - **[`README.md`](./README.md)** — landing index for this folder
-- **[`../PROJECT.md`](../PROJECT.md)** — product schema, HIPAA-minded technical notes
+- **[`../PROJECT.md`](../PROJECT.md)** — product spec, schema, HIPAA-relevant technical notes

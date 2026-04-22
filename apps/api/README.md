@@ -1,7 +1,8 @@
 # `apps/api` — ClinicSign backend
 
-> Express + TypeScript + Prisma + Pino + Zod, running on ECS Fargate behind an ALB and CloudFront.
-> The whole API is around 3,000 LOC. Every route validates with Zod, every error has a code, every interesting event writes an audit row.
+Express + TypeScript + Prisma + Pino + Zod, running on ECS Fargate behind an ALB and CloudFront.
+
+Every route validates with Zod, every error has a stable `code`, every interesting event writes an `AuditLog` row.
 
 ---
 
@@ -134,7 +135,7 @@ All routes live under `/api`. Auth column: **C** = Clerk JWT (`req.appUser` popu
 
 ---
 
-## The patient signing flow (the interesting one)
+## The patient signing flow
 
 ```
 Clinician POST /documents/:id/send
@@ -174,7 +175,7 @@ signing.service.completeSigning()
   └─ email.service.sendCompletion({ provider, patient }) → Resend
 ```
 
-`AuditLog` is the source of truth for "what happened, who did it, when". The model has no `update` or `delete` calls in the codebase. If we ever need to disprove a tampering claim, we replay the log.
+`AuditLog` is the source of truth for "what happened, who did it, when". The model has no `update` or `delete` call sites in the codebase — it's append-only by convention and by review.
 
 ---
 
@@ -223,7 +224,7 @@ Health check is `GET /health`, returns `{ status: "ok" }`. **It deliberately tou
 - **Structured logs** (Pino): every request gets `requestId`, `userId` (when Clerk-authed), `documentId` (when in scope), latency, status. Search CloudWatch for one `requestId` and you get the entire request lifecycle.
 - **Audit log table**: business-level history, queryable from SQL.
 - **CloudWatch Logs** group: `/clinicsign/<stack>/api`, 14-day retention.
-- **No `console.log` in production code** — enforced by Cursor rule and review.
+- **No `console.log` in production code.** Pino only; enforced at review time.
 
 ---
 
