@@ -1,0 +1,3 @@
+# Vendored third-party build artifact from pdfjs-dist.
+# Don't let it skew GitHub's language stats.
+apps/web/public/pdf.worker.min.mjs linguist-vendored
