@@ -134,6 +134,22 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+/**
+ * Placement grid for fields. 0.5% of page width/height ≈ 4px on a
+ * standard ~800px-wide rendered PDF, which is fine enough that the
+ * user can hit any visual spot but coarse enough that two fields
+ * placed in succession actually align. Hold Alt while dragging or
+ * dropping to bypass — Figma convention.
+ */
+const SNAP_STEP = 0.005;
+
+function snap(n: number, enabled: boolean): number {
+  if (!enabled) {
+    return n;
+  }
+  return Math.round(n / SNAP_STEP) * SNAP_STEP;
+}
+
 type EditorField = {
   id: string;
   type: ApiFieldType;
@@ -332,10 +348,16 @@ export function DocumentPdfEditor({
   // not sit at 900px with empty whitespace on both sides.
   const pageWidth = Math.max(280, containerWidth);
 
-  const addField = useCallback((type: ApiFieldType, page: number, nx: number, ny: number) => {
+  const addField = useCallback((
+    type: ApiFieldType,
+    page: number,
+    nx: number,
+    ny: number,
+    snapEnabled: boolean
+  ) => {
     const { width: w, height: h } = FIELD_DEFAULTS[type];
-    let x = clamp01(nx - w / 2);
-    let y = clamp01(ny - h / 2);
+    let x = clamp01(snap(nx - w / 2, snapEnabled));
+    let y = clamp01(snap(ny - h / 2, snapEnabled));
     x = Math.min(x, 1 - w);
     y = Math.min(y, 1 - h);
     const id =
@@ -364,6 +386,12 @@ export function DocumentPdfEditor({
     setSelectedId((s) => (s === id ? null : s));
   }, []);
 
+  const toggleRequired = useCallback((id: string) => {
+    setFields((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, required: !f.required } : f))
+    );
+  }, []);
+
   useEffect(() => {
     function onPointerMove(e: PointerEvent) {
       const d = activeDrag.current;
@@ -384,13 +412,15 @@ export function DocumentPdfEditor({
       const ph = d.pageRect.height;
       const dx = (e.clientX - d.startMouse.x) / pw;
       const dy = (e.clientY - d.startMouse.y) / ph;
+      // Hold Alt to bypass the snap grid for pixel-precise placement.
+      const snapEnabled = !e.altKey;
       setFields((prev) =>
         prev.map((f) => {
           if (f.id !== d.fieldId) {
             return f;
           }
-          const nx = clamp01(d.origin.x + dx);
-          const ny = clamp01(d.origin.y + dy);
+          const nx = clamp01(snap(d.origin.x + dx, snapEnabled));
+          const ny = clamp01(snap(d.origin.y + dy, snapEnabled));
           return {
             ...f,
             x: Math.min(nx, 1 - f.width),
@@ -460,7 +490,7 @@ export function DocumentPdfEditor({
     const rect = e.currentTarget.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width;
     const ny = (e.clientY - rect.top) / rect.height;
-    addField(tool, pageNumber, nx, ny);
+    addField(tool, pageNumber, nx, ny, !e.altKey);
   }
 
   useEffect(() => {
@@ -490,11 +520,20 @@ export function DocumentPdfEditor({
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         removeField(selectedId);
+        return;
+      }
+      // R toggles required on the selected field. Lowercase only — the
+      // uppercase variant is reserved so Shift+R doesn't collide with
+      // future shortcuts (e.g. resize, replace) and keeps the behavior
+      // discoverable from the side panel button label.
+      if (e.key === "r" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        toggleRequired(selectedId);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [readOnly, selectedId, removeField, tool]);
+  }, [readOnly, selectedId, removeField, toggleRequired, tool]);
 
   // Track the cursor over each page (in 0..1 coords) so we can render a
   // ghost preview of where the field will land. Only fires when a tool is
@@ -509,7 +548,17 @@ export function DocumentPdfEditor({
     const rect = e.currentTarget.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width;
     const ny = (e.clientY - rect.top) / rect.height;
-    setGhost({ page: pageNumber, x: nx, y: ny });
+    // Snap the ghost so the preview matches the final placement
+    // (handlePageClick uses the same alt-bypass rule). The early
+    // return above narrows tool to ApiFieldType, so FIELD_DEFAULTS
+    // lookup is type-safe.
+    const snapEnabled = !e.altKey;
+    const dims = FIELD_DEFAULTS[tool];
+    setGhost({
+      page: pageNumber,
+      x: snap(nx - dims.width / 2, snapEnabled) + dims.width / 2,
+      y: snap(ny - dims.height / 2, snapEnabled) + dims.height / 2,
+    });
   }
 
   function handlePageMouseLeave(): void {
@@ -599,17 +648,29 @@ export function DocumentPdfEditor({
         <p className="text-body-sm text-muted-foreground">
           {tool === "select" ? (
             <>
-              Drag fields to reposition. Press{" "}
+              Drag fields to reposition (snaps to a 0.5% grid; hold{" "}
+              <kbd className="rounded border bg-muted px-1 font-mono text-caption">
+                Alt
+              </kbd>{" "}
+              to bypass). Press{" "}
+              <kbd className="rounded border bg-muted px-1 font-mono text-caption">
+                R
+              </kbd>{" "}
+              to toggle required,{" "}
               <kbd className="rounded border bg-muted px-1 font-mono text-caption">
                 Delete
               </kbd>{" "}
-              to remove a selected field.
+              to remove.
             </>
           ) : (
             <>
               Click on the page to drop a{" "}
               <strong className="text-foreground">{FIELD_LABEL[tool]}</strong>{" "}
-              field. Press{" "}
+              field. Hold{" "}
+              <kbd className="rounded border bg-muted px-1 font-mono text-caption">
+                Alt
+              </kbd>{" "}
+              to bypass snap, or press{" "}
               <kbd className="rounded border bg-muted px-1 font-mono text-caption">
                 Esc
               </kbd>{" "}
@@ -807,7 +868,34 @@ export function DocumentPdfEditor({
               {FIELD_LABEL[selected.type]} on page {selected.page}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-pressed={selected.required}
+              onClick={() => toggleRequired(selected.id)}
+              className={cn(
+                "gap-2 transition-colors",
+                selected.required
+                  ? "border-destructive/60 bg-destructive/10 text-destructive hover:bg-destructive/15"
+                  : "text-muted-foreground"
+              )}
+              title={
+                selected.required
+                  ? "Required — recipient must fill this field"
+                  : "Optional — recipient can skip this field"
+              }
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "inline-block h-1.5 w-1.5 rounded-full",
+                  selected.required ? "bg-destructive" : "bg-muted-foreground/60"
+                )}
+              />
+              {selected.required ? "Required" : "Optional"}
+            </Button>
             <Button
               type="button"
               variant="outline"
