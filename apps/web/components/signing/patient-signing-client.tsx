@@ -1,7 +1,13 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Calendar, Check, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  ArrowDown,
+  Calendar,
+  Check,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import * as React from "react";
 import SignaturePad from "signature_pad";
@@ -52,6 +58,36 @@ const FIELD_LABEL: Record<ApiFieldType, string> = {
 
 function isValidToken(t: string): boolean {
   return /^[a-f0-9]{64}$/i.test(t);
+}
+
+/**
+ * Whether a field currently has a meaningful value. Centralized here because
+ * three separate places (render state, submit gate, auto-scroll next pointer)
+ * all need the exact same definition — drift between them would let the
+ * "Sign here" pill point at a field the submit gate thinks is done.
+ */
+function isFieldFilled(
+  values: Record<string, string>,
+  field: { id: string; type: ApiFieldType }
+): boolean {
+  const raw = values[field.id] ?? "";
+  return field.type === "CHECKBOX" ? raw === "true" : raw.trim().length > 0;
+}
+
+/**
+ * Scroll a field overlay into view without snapping the user to the top of
+ * the viewport. `block: "center"` is picked so the field lands roughly in
+ * the middle of both the page window AND the inner PDF scroll container
+ * (scrollIntoView walks every scrollable ancestor). Soft-fails on SSR.
+ */
+function scrollToFieldId(id: string): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const el = document.querySelector<HTMLElement>(`[data-field-id="${id}"]`);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 }
 
 /**
@@ -162,7 +198,6 @@ export function PatientSigningClient({
   const [sigTab, setSigTab] = React.useState<"type" | "draw">("draw");
   const [typedSig, setTypedSig] = React.useState("");
   const [draftText, setDraftText] = React.useState("");
-  const [submitHint, setSubmitHint] = React.useState<string | null>(null);
 
   const viewQuery = useQuery({
     queryKey: ["signing-view", token],
@@ -309,34 +344,58 @@ export function PatientSigningClient({
     },
   });
 
-  function validate(): string | null {
-    const data = viewQuery.data;
-    if (!data) {
-      return "Missing document.";
-    }
-    for (const f of data.fields) {
-      if (!f.required) {
-        continue;
+  /**
+   * Ref-synced copy of `values` so the post-save auto-scroll can compute
+   * the *next* unfilled field without a stale closure. We can't read
+   * `values` directly inside the deferred callback: React batches the
+   * setEdits update, and when `requestAnimationFrame` fires, the closure
+   * was captured before the batch committed.
+   */
+  const valuesRef = React.useRef(values);
+  React.useEffect(() => {
+    valuesRef.current = values;
+  }, [values]);
+
+  /**
+   * Defer one animation frame so React commits the pending setEdits state,
+   * then scroll to the next required-but-empty field. If nothing's left,
+   * do nothing — the submit button is about to enable and the patient's
+   * attention should travel there on its own (the sticky mobile bar + the
+   * desktop CTA both update in place).
+   */
+  const focusNextUnfilled = React.useCallback(
+    (justSavedId?: string) => {
+      if (!viewQuery.data) {
+        return;
       }
-      const v = (values[f.id] ?? "").trim();
-      if (f.type === "CHECKBOX") {
-        if (v !== "true") {
-          return "Please check the required box.";
+      const fields = viewQuery.data.fields;
+      requestAnimationFrame(() => {
+        const vals = valuesRef.current;
+        const next = fields.find(
+          (f) => f.required && f.id !== justSavedId && !isFieldFilled(vals, f)
+        );
+        if (next) {
+          scrollToFieldId(next.id);
         }
-      } else if (v === "") {
-        return `Please complete: ${FIELD_LABEL[f.type]}`;
-      }
-    }
-    return null;
-  }
+      });
+    },
+    [viewQuery.data]
+  );
 
   function handleSubmit(): void {
-    const err = validate();
-    if (err) {
-      setSubmitHint(err);
+    if (!viewQuery.data) {
       return;
     }
-    setSubmitHint(null);
+    const missing = viewQuery.data.fields.find(
+      (f) => f.required && !isFieldFilled(values, f)
+    );
+    if (missing) {
+      // Defensive guard: the submit button is disabled when incomplete, but
+      // if a patient somehow triggers this (keyboard, programmatic), scroll
+      // them to the first unfilled field instead of silently no-op-ing.
+      scrollToFieldId(missing.id);
+      return;
+    }
     completeMut.mutate();
   }
 
@@ -360,7 +419,9 @@ export function PatientSigningClient({
     } else {
       setEdits((p) => ({ ...p, [activeField.id]: draftText }));
     }
+    const savedId = activeField.id;
     setActiveFieldId(null);
+    focusNextUnfilled(savedId);
   }
 
   function toggleCheckbox(id: string): void {
@@ -372,6 +433,7 @@ export function PatientSigningClient({
         [id]: cur === "true" ? "" : "true",
       };
     });
+    focusNextUnfilled(id);
   }
 
   if (!isValidToken(token)) {
@@ -480,6 +542,17 @@ export function PatientSigningClient({
     return <></>;
   }
 
+  const requiredFields = view.fields.filter((f) => f.required);
+  const requiredTotal = requiredFields.length;
+  const filledRequired = requiredFields.filter((f) =>
+    isFieldFilled(values, f)
+  ).length;
+  const remainingRequired = requiredTotal - filledRequired;
+  const nextUnfilled = requiredFields.find((f) => !isFieldFilled(values, f));
+  const canSubmit = remainingRequired === 0;
+  const progressPct =
+    requiredTotal === 0 ? 100 : Math.round((filledRequired / requiredTotal) * 100);
+
   if (view.document.status === "SIGNED" || completeMut.isSuccess) {
     return (
       <main
@@ -532,6 +605,55 @@ export function PatientSigningClient({
                 </p>
               </CardContent>
             </Card>
+          ) : null}
+
+          {requiredTotal > 0 ? (
+            <div className="mx-auto max-w-3xl">
+              <div
+                className="border-border bg-card flex items-center gap-4 rounded-md border px-4 py-3 shadow-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-body text-foreground font-medium tabular-nums">
+                      {canSubmit
+                        ? "All required fields complete"
+                        : `${filledRequired} of ${requiredTotal} complete`}
+                    </p>
+                    {!canSubmit ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          nextUnfilled && scrollToFieldId(nextUnfilled.id)
+                        }
+                        className="text-caption text-primary hover:text-primary/80 inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline"
+                      >
+                        Next field
+                        <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                    ) : (
+                      <span className="text-caption text-success inline-flex items-center gap-1 font-medium">
+                        <Check className="h-3.5 w-3.5" aria-hidden strokeWidth={2.5} />
+                        Ready to submit
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
+                    aria-hidden
+                  >
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all duration-300 ease-out",
+                        canSubmit ? "bg-success" : "bg-primary"
+                      )}
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : null}
 
           <Card className="overflow-hidden shadow-sm">
@@ -608,57 +730,87 @@ export function PatientSigningClient({
                                 field.type === "CHECKBOX"
                                   ? raw === "true"
                                   : raw.trim().length > 0;
+                              const isNext =
+                                !filled &&
+                                field.required &&
+                                nextUnfilled?.id === field.id;
                               return (
-                                <button
-                                  key={field.id}
-                                  type="button"
-                                  // data-field-overlay is consumed by the
-                                  // globals.css min-height exclusion so this
-                                  // hit-area isn't force-stretched to 44px.
-                                  data-field-overlay
-                                  aria-label={
-                                    filled
-                                      ? `${FIELD_LABEL[field.type]} — change`
-                                      : `Add ${FIELD_LABEL[field.type]}`
-                                  }
-                                  className={cn(
-                                    "absolute flex touch-manipulation items-center overflow-hidden border-2 transition-colors",
-                                    filled
-                                      ? "border-success/70 bg-success/5 text-success"
-                                      : "border-primary/60 bg-primary/5 text-primary hover:bg-primary/10",
-                                    "cursor-pointer"
-                                  )}
-                                  style={{
-                                    left: `${field.x * 100}%`,
-                                    top: `${field.y * 100}%`,
-                                    width: `${field.width * 100}%`,
-                                    height: `${field.height * 100}%`,
-                                  }}
-                                  onClick={() => {
-                                    if (field.type === "CHECKBOX") {
-                                      toggleCheckbox(field.id);
-                                      return;
+                                <React.Fragment key={field.id}>
+                                  <button
+                                    type="button"
+                                    data-field-id={field.id}
+                                    // data-field-overlay is consumed by the
+                                    // globals.css min-height exclusion so this
+                                    // hit-area isn't force-stretched to 44px.
+                                    data-field-overlay
+                                    aria-label={
+                                      filled
+                                        ? `${FIELD_LABEL[field.type]} — change`
+                                        : `Add ${FIELD_LABEL[field.type]}`
                                     }
-                                    const current = values[field.id] ?? "";
-                                    if (field.type === "SIGNATURE") {
-                                      setTypedSig(
-                                        current.startsWith("data:image")
-                                          ? ""
-                                          : current
-                                      );
-                                      setSigTab("draw");
-                                    } else {
-                                      setDraftText(current);
-                                    }
-                                    setActiveFieldId(field.id);
-                                  }}
-                                >
-                                  <FieldOverlayContent
-                                    type={field.type}
-                                    required={field.required}
-                                    value={raw}
-                                  />
-                                </button>
+                                    className={cn(
+                                      "absolute flex touch-manipulation items-center overflow-hidden border-2 transition-colors cursor-pointer",
+                                      filled
+                                        ? "border-success/70 bg-success/5 text-success"
+                                        : isNext
+                                          ? "border-primary bg-primary/10 text-primary shadow-[0_0_0_3px_rgba(46,117,104,0.18)]"
+                                          : "border-primary/60 bg-primary/5 text-primary hover:bg-primary/10"
+                                    )}
+                                    style={{
+                                      left: `${field.x * 100}%`,
+                                      top: `${field.y * 100}%`,
+                                      width: `${field.width * 100}%`,
+                                      height: `${field.height * 100}%`,
+                                    }}
+                                    onClick={() => {
+                                      if (field.type === "CHECKBOX") {
+                                        toggleCheckbox(field.id);
+                                        return;
+                                      }
+                                      const current = values[field.id] ?? "";
+                                      if (field.type === "SIGNATURE") {
+                                        setTypedSig(
+                                          current.startsWith("data:image")
+                                            ? ""
+                                            : current
+                                        );
+                                        setSigTab("draw");
+                                      } else {
+                                        setDraftText(current);
+                                      }
+                                      setActiveFieldId(field.id);
+                                    }}
+                                  >
+                                    <FieldOverlayContent
+                                      type={field.type}
+                                      required={field.required}
+                                      value={raw}
+                                    />
+                                  </button>
+                                  {isNext ? (
+                                    // Sibling pill (not a child) because the
+                                    // button has overflow-hidden to clip long
+                                    // TEXT values. Positioned above the field
+                                    // in the same percentage coordinate space
+                                    // as the page wrap.
+                                    <span
+                                      aria-hidden
+                                      className="bg-primary text-primary-foreground animate-pulse pointer-events-none absolute z-10 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shadow-md"
+                                      style={{
+                                        left: `${field.x * 100 + (field.width * 100) / 2}%`,
+                                        top: `calc(${field.y * 100}% - 1.5rem)`,
+                                        transform: "translateX(-50%)",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      Sign here
+                                      <ArrowDown
+                                        className="h-3 w-3"
+                                        strokeWidth={2.5}
+                                      />
+                                    </span>
+                                  ) : null}
+                                </React.Fragment>
                               );
                             })}
                         </div>
@@ -675,12 +827,17 @@ export function PatientSigningClient({
           {/* Inline submit area for desktop / tablet — stays inside flow.
               Clamped back to max-w-3xl so the button doesn't sit isolated at
               the far right of a 1024px column on wide screens. */}
-          <div className="mx-auto hidden max-w-3xl sm:flex sm:flex-row sm:justify-end">
+          <div className="mx-auto hidden max-w-3xl items-center justify-between gap-3 sm:flex">
+            <p className="text-body-sm text-muted-foreground min-w-0">
+              {canSubmit
+                ? "Review your answers, then submit."
+                : `${remainingRequired} required field${remainingRequired === 1 ? "" : "s"} remaining.`}
+            </p>
             <Button
               type="button"
               size="lg"
               className="min-h-12 text-body-lg"
-              disabled={completeMut.isPending}
+              disabled={!canSubmit || completeMut.isPending}
               onClick={handleSubmit}
             >
               {completeMut.isPending ? (
@@ -693,12 +850,6 @@ export function PatientSigningClient({
               )}
             </Button>
           </div>
-
-          {submitHint ? (
-            <p className="text-body text-destructive mx-auto max-w-3xl" role="alert">
-              {submitHint}
-            </p>
-          ) : null}
 
           {completeMut.error ? (
             <p className="text-body text-destructive mx-auto max-w-3xl" role="alert">
@@ -716,11 +867,41 @@ export function PatientSigningClient({
           className="bg-background/95 border-border fixed inset-x-0 bottom-0 z-40 border-t px-3 pt-3 backdrop-blur sm:hidden"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
         >
+          {requiredTotal > 0 ? (
+            <div className="mb-2 space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-caption text-foreground font-medium tabular-nums">
+                  {canSubmit
+                    ? "Ready to submit"
+                    : `${filledRequired} of ${requiredTotal} complete`}
+                </p>
+                {!canSubmit && nextUnfilled ? (
+                  <button
+                    type="button"
+                    onClick={() => scrollToFieldId(nextUnfilled.id)}
+                    className="text-caption text-primary inline-flex items-center gap-1 font-medium"
+                  >
+                    Next
+                    <ArrowDown className="h-3 w-3" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
+              <div className="bg-muted h-1 w-full overflow-hidden rounded-full" aria-hidden>
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-300 ease-out",
+                    canSubmit ? "bg-success" : "bg-primary"
+                  )}
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
           <Button
             type="button"
             size="lg"
             className="min-h-12 w-full text-body-lg"
-            disabled={completeMut.isPending}
+            disabled={!canSubmit || completeMut.isPending}
             onClick={handleSubmit}
           >
             {completeMut.isPending ? (
