@@ -150,6 +150,58 @@ function snap(n: number, enabled: boolean): number {
   return Math.round(n / SNAP_STEP) * SNAP_STEP;
 }
 
+/**
+ * Maximum distance at which a candidate position will be magnetized
+ * to a sibling field's edge (top/left). 1.2% of page dim ≈ 10px on a
+ * typical ~800px-wide PDF — close enough to feel intentional but
+ * tight enough that fields you actually want offset by half a row
+ * aren't yanked together.
+ */
+const ALIGN_THRESHOLD = 0.012;
+
+/**
+ * Smart alignment to existing fields on the same page. Mirrors how
+ * design tools (Figma, Sketch) handle alignment guides: when a placed
+ * or dragged field's top/left lands within ALIGN_THRESHOLD of any
+ * other field's top/left on the same page, snap to that exact edge.
+ *
+ * This is layered ON TOP of the 0.5% grid snap because a grid alone
+ * cannot guarantee alignment — two clicks 3px apart vertically still
+ * land in adjacent grid cells, which reads as misaligned.
+ *
+ * Pass currentId to exclude the field being moved from its own
+ * alignment search (otherwise dragging a field would always align it
+ * to its own previous position).
+ */
+function alignToSiblings(
+  x: number,
+  y: number,
+  page: number,
+  fields: EditorField[],
+  currentId: string | null
+): { x: number; y: number } {
+  let alignedX = x;
+  let alignedY = y;
+  let bestDx = ALIGN_THRESHOLD;
+  let bestDy = ALIGN_THRESHOLD;
+  for (const f of fields) {
+    if (f.page !== page || f.id === currentId) {
+      continue;
+    }
+    const dx = Math.abs(f.x - x);
+    if (dx < bestDx) {
+      alignedX = f.x;
+      bestDx = dx;
+    }
+    const dy = Math.abs(f.y - y);
+    if (dy < bestDy) {
+      alignedY = f.y;
+      bestDy = dy;
+    }
+  }
+  return { x: alignedX, y: alignedY };
+}
+
 type EditorField = {
   id: string;
   type: ApiFieldType;
@@ -358,6 +410,11 @@ export function DocumentPdfEditor({
     const { width: w, height: h } = FIELD_DEFAULTS[type];
     let x = clamp01(snap(nx - w / 2, snapEnabled));
     let y = clamp01(snap(ny - h / 2, snapEnabled));
+    if (snapEnabled) {
+      const aligned = alignToSiblings(x, y, page, fields, null);
+      x = aligned.x;
+      y = aligned.y;
+    }
     x = Math.min(x, 1 - w);
     y = Math.min(y, 1 - h);
     const id =
@@ -379,7 +436,7 @@ export function DocumentPdfEditor({
     ]);
     setSelectedId(id);
     setTool("select");
-  }, []);
+  }, [fields]);
 
   const removeField = useCallback((id: string) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
@@ -412,15 +469,21 @@ export function DocumentPdfEditor({
       const ph = d.pageRect.height;
       const dx = (e.clientX - d.startMouse.x) / pw;
       const dy = (e.clientY - d.startMouse.y) / ph;
-      // Hold Alt to bypass the snap grid for pixel-precise placement.
+      // Hold Alt to bypass both the grid snap and the alignment guides
+      // for pixel-precise placement.
       const snapEnabled = !e.altKey;
       setFields((prev) =>
         prev.map((f) => {
           if (f.id !== d.fieldId) {
             return f;
           }
-          const nx = clamp01(snap(d.origin.x + dx, snapEnabled));
-          const ny = clamp01(snap(d.origin.y + dy, snapEnabled));
+          let nx = clamp01(snap(d.origin.x + dx, snapEnabled));
+          let ny = clamp01(snap(d.origin.y + dy, snapEnabled));
+          if (snapEnabled) {
+            const aligned = alignToSiblings(nx, ny, f.page, prev, f.id);
+            nx = aligned.x;
+            ny = aligned.y;
+          }
           return {
             ...f,
             x: Math.min(nx, 1 - f.width),
@@ -554,10 +617,23 @@ export function DocumentPdfEditor({
     // lookup is type-safe.
     const snapEnabled = !e.altKey;
     const dims = FIELD_DEFAULTS[tool];
+    let topLeftX = clamp01(snap(nx - dims.width / 2, snapEnabled));
+    let topLeftY = clamp01(snap(ny - dims.height / 2, snapEnabled));
+    if (snapEnabled) {
+      const aligned = alignToSiblings(
+        topLeftX,
+        topLeftY,
+        pageNumber,
+        fields,
+        null
+      );
+      topLeftX = aligned.x;
+      topLeftY = aligned.y;
+    }
     setGhost({
       page: pageNumber,
-      x: snap(nx - dims.width / 2, snapEnabled) + dims.width / 2,
-      y: snap(ny - dims.height / 2, snapEnabled) + dims.height / 2,
+      x: topLeftX + dims.width / 2,
+      y: topLeftY + dims.height / 2,
     });
   }
 
