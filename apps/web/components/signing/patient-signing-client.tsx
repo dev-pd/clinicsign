@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PdfDebugInspector } from "@/components/debug/pdf-debug-inspector";
 import {
   ApiError,
   completeSigning,
@@ -502,6 +503,12 @@ export function PatientSigningClient({
 
   return (
     <>
+      {/*
+        Diagnostic overlay (no-op unless URL has ?debug=1). Mounted at the
+        top of the tree so it's visible alongside the PDF on phone and web.
+        Remove once the alignment investigation is closed.
+      */}
+      <PdfDebugInspector />
       <main
         data-audience="patient"
         className="bg-background min-h-screen px-3 pb-32 pt-6 sm:px-4 sm:py-8 md:px-8"
@@ -607,6 +614,18 @@ export function PatientSigningClient({
                                 <button
                                   key={field.id}
                                   type="button"
+                                  // data-field-* attributes are read by the
+                                  // PdfDebugInspector overlay (gated on
+                                  // ?debug=1) to compare expected vs painted
+                                  // pixel positions. Safe to leave on in
+                                  // prod — they cost nothing without the flag.
+                                  data-field-overlay
+                                  data-field-id={field.id}
+                                  data-field-type={field.type}
+                                  data-field-x={field.x}
+                                  data-field-y={field.y}
+                                  data-field-w={field.width}
+                                  data-field-h={field.height}
                                   aria-label={
                                     filled
                                       ? `${FIELD_LABEL[field.type]} — change`
