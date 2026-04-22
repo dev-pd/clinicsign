@@ -728,22 +728,6 @@ const distribution = new aws.cloudfront.Distribution(`clinicsign-api-cf-${stack}
 });
 
 // ---------------------------------------------------------------
-// SES domain identity (optional, requires you own a domain)
-// Uncomment and set the domain if you want to send from your own domain.
-// Otherwise, use a verified email identity manually in the SES console,
-// or use Resend for simpler dev setup.
-// ---------------------------------------------------------------
-// const sesDomain = new aws.ses.DomainIdentity("clinicsign-ses-domain", {
-//   domain: "example.com",
-// });
-//
-// const sesDkim = new aws.ses.DomainDkim("clinicsign-ses-dkim", {
-//   domain: sesDomain.domain,
-// });
-//
-// // You'll need to add the DKIM records to your DNS provider. Pulumi outputs them.
-
-// ---------------------------------------------------------------
 // Outputs
 // ---------------------------------------------------------------
 export const s3BucketName = documentsBucket.id;

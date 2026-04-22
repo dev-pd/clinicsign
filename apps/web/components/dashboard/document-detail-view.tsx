@@ -465,9 +465,6 @@ export function DocumentDetailView({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Overview card (title + status + timeline + primary action)
-// ---------------------------------------------------------------------------
 
 function OverviewCard({
   doc,
@@ -700,9 +697,6 @@ function timelineEvents(
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Recipient card
-// ---------------------------------------------------------------------------
 
 /**
  * Recipient card is only rendered once a recipient exists. The
@@ -806,9 +800,6 @@ function tokenExpiresLine(
   return `Expires ${relativeTime(recipient.tokenExpiresAt)}`;
 }
 
-// ---------------------------------------------------------------------------
-// Fields breakdown card
-// ---------------------------------------------------------------------------
 
 const FIELD_META: Record<
   ApiFieldType,
@@ -937,9 +928,6 @@ function FieldsBreakdownCard({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeleton
-// ---------------------------------------------------------------------------
 
 function DetailSkeleton(): JSX.Element {
   return (
@@ -982,9 +970,6 @@ function DetailSkeleton(): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);

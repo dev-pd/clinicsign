@@ -236,9 +236,6 @@ export default function NewDocumentPage(): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Stepper
-// ---------------------------------------------------------------------------
 
 function Stepper({ state }: { state: Record<StepKey, StepState> }): JSX.Element {
   return (
@@ -320,9 +317,6 @@ function StepDot({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Template chip row (zero-state)
-// ---------------------------------------------------------------------------
 
 type TemplateChip = {
   id: string;
@@ -371,9 +365,6 @@ function TemplateChipRow(): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Small helpers
-// ---------------------------------------------------------------------------
 
 function SectionHeading({
   eyebrow,

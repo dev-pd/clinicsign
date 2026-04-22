@@ -273,9 +273,6 @@ export function DocumentsCommandCenter(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Page header
-// ---------------------------------------------------------------------------
 
 function PageHeader(): JSX.Element {
   return (
@@ -291,9 +288,6 @@ function PageHeader(): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Attention banner
-// ---------------------------------------------------------------------------
 
 type AttentionKind = "stale" | "expiring" | "draft";
 type AttentionItem = {
@@ -387,9 +381,8 @@ function AttentionBanner({ items }: { items: AttentionItem[] }): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Ask ClinicSign (reserved AI slot)
-// ---------------------------------------------------------------------------
+// Placeholder for a future AI assist surface; kept here so the dashboard
+// reserves vertical space without needing a layout reshuffle later.
 
 function AskCopilotBar(): JSX.Element {
   return (
@@ -418,9 +411,6 @@ function AskCopilotBar(): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// KPIs
-// ---------------------------------------------------------------------------
 
 type Kpis = {
   drafts: KpiEntry;
@@ -578,9 +568,6 @@ function Sparkline({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Filter bar
-// ---------------------------------------------------------------------------
 
 const CHIP_LABEL: Record<ChipKey, string> = {
   stale: "Stale > 48h",
@@ -668,10 +655,6 @@ function FilterBar({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Documents table
-// ---------------------------------------------------------------------------
 
 // Fixed column widths so page-to-page layout is stable regardless of how
 // long the titles are. The Title column is pinned to the left via
@@ -951,9 +934,6 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Pagination footer
-// ---------------------------------------------------------------------------
 
 function PaginationFooter({
   page,
@@ -1008,9 +988,6 @@ function PaginationFooter({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Right rail: Activity + Templates
-// ---------------------------------------------------------------------------
 
 type ActivityItem = {
   id: string;
@@ -1131,9 +1108,6 @@ function TemplatesCard(): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeleton
-// ---------------------------------------------------------------------------
 
 function CommandCenterSkeleton(): JSX.Element {
   return (
@@ -1172,9 +1146,6 @@ function CommandCenterSkeleton(): JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers — derivations over the fetched documents list
-// ---------------------------------------------------------------------------
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
