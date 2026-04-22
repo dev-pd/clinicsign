@@ -631,7 +631,17 @@ export function DocumentPdfEditor({
         <p className="text-body text-destructive">{pdfLoadError}</p>
       ) : null}
 
-      {pdfUrl && !pdfLoadError && workerReady ? (
+      {/*
+        Scroll wrapper + pageHostRef must mount on first render so the
+        layout effect can measure el.clientWidth via ResizeObserver.
+        Previously this whole subtree was gated on `pdfUrl && workerReady`,
+        which left the ref null on mount; the effect ran once, returned
+        early, and pageWidth stayed pinned to the useState(320) default.
+        Now the host is always present and the loading message lives
+        inside it; the Document mounts later when the URL + worker are
+        ready, but the host width is already known by then.
+      */}
+      {!pdfLoadError ? (
         <div
           className="bg-muted/30 border-border max-h-[min(80vh,900px)] overflow-y-auto overscroll-contain rounded-md border p-3"
           aria-label={
@@ -641,6 +651,7 @@ export function DocumentPdfEditor({
           }
         >
         <div ref={pageHostRef} className="w-full">
+        {pdfUrl && workerReady ? (
         <Document
           file={pdfUrl}
           loading={
@@ -786,12 +797,13 @@ export function DocumentPdfEditor({
               })
             : null}
         </Document>
+        ) : (
+          <div className="text-body text-muted-foreground flex items-center gap-2 py-8">
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            Preparing viewer…
+          </div>
+        )}
         </div>
-        </div>
-      ) : !pdfLoadError ? (
-        <div className="text-body text-muted-foreground flex items-center gap-2 py-8">
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-          Preparing viewer…
         </div>
       ) : null}
 

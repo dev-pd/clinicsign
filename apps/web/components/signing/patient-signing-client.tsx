@@ -553,13 +553,22 @@ export function PatientSigningClient({
                     : "Document"
                 }
               >
+              {/*
+                pageHostRef MUST live outside the workerReady conditional.
+                The layout effect that measures el.clientWidth runs once on
+                mount; if the host is hidden behind a `workerReady` ternary
+                it doesn't exist yet, the ref is null, and the ResizeObserver
+                never attaches. pageWidth then stays stuck at the
+                useState(320) default forever — the PDF renders at a tiny
+                fixed 320px even on a 1500px laptop.
+              */}
+              <div ref={pageHostRef} className="w-full">
               {!workerReady ? (
                 <div className="text-body-lg text-muted-foreground flex items-center gap-2 py-12">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                   Loading PDF…
                 </div>
               ) : (
-              <div ref={pageHostRef} className="w-full">
               <Document
                 file={view.originalPdfUrl}
                 loading={
@@ -676,8 +685,8 @@ export function PatientSigningClient({
                     })
                   : null}
               </Document>
-              </div>
               )}
+              </div>
               </div>
             </CardContent>
           </Card>

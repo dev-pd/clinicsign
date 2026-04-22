@@ -218,9 +218,18 @@
     line-height: 1.6;
   }
 
-  [data-audience="patient"] button,
-  [data-audience="patient"] a,
-  [data-audience="patient"] [role="button"] {
+  /*
+   * WCAG-style 44px touch target for patient-facing controls. We exclude
+   * elements with [data-field-overlay] because those are PDF field hit
+   * areas whose width AND height are derived from clinician-placed
+   * percentage coords on the page — forcing min-height: 44px there
+   * silently extends the box past its stored bottom (e.g. a 24.8px-tall
+   * signature field becomes 44px tall, bleeding 19px into the content
+   * below it on the rendered PDF).
+   */
+  [data-audience="patient"] button:not([data-field-overlay]),
+  [data-audience="patient"] a:not([data-field-overlay]),
+  [data-audience="patient"] [role="button"]:not([data-field-overlay]) {
     min-height: 44px;
   }
 
