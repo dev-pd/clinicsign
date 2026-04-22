@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText, History } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { DocumentActivityTimeline } from "@/components/dashboard/document-activity-timeline";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,6 +28,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -329,29 +336,74 @@ export function DocumentDetailView({
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
           <div className="min-w-0 space-y-4">
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle>Preview</CardTitle>
-                <CardDescription>
-                  {doc.status === "DRAFT"
-                    ? "Place fields on the PDF, then save. Drag to move fields in Select mode."
-                    : hasSignedPdf
-                    ? "Signed copy with the recipient's entries flattened onto the document."
-                    : "Fields are locked after send. Download PDFs from the actions above."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PdfShellErrorBoundary key={pdfEditorKey}>
-                  <DocumentPdfEditor
-                    documentId={documentId}
-                    readOnly={doc.status !== "DRAFT"}
-                    fields={doc.fields}
-                    updatedAt={doc.updatedAt}
-                    pdfVariant={hasSignedPdf ? "signed" : "original"}
-                  />
-                </PdfShellErrorBoundary>
-              </CardContent>
-            </Card>
+            {/*
+              forceMount on both TabsContent keeps the PDF editor
+              instance mounted while the user toggles to the Activity
+              tab — switching back doesn't trigger a refetch of the
+              presigned PDF URL or wipe in-progress field edits in
+              DRAFT mode. Hidden state is driven by Radix's data-state.
+            */}
+            <Tabs defaultValue="preview" className="w-full">
+              <TabsList variant="line" className="w-full justify-start">
+                <TabsTrigger value="preview">
+                  <FileText aria-hidden="true" strokeWidth={1.5} />
+                  Preview
+                </TabsTrigger>
+                <TabsTrigger value="activity">
+                  <History aria-hidden="true" strokeWidth={1.5} />
+                  Activity
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent
+                value="preview"
+                forceMount
+                className="data-[state=inactive]:hidden"
+              >
+                <Card className="shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Preview</CardTitle>
+                    <CardDescription>
+                      {doc.status === "DRAFT"
+                        ? "Place fields on the PDF, then save. Drag to move fields in Select mode."
+                        : hasSignedPdf
+                        ? "Signed copy with the recipient's entries flattened onto the document."
+                        : "Fields are locked after send. Download PDFs from the actions above."}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <PdfShellErrorBoundary key={pdfEditorKey}>
+                      <DocumentPdfEditor
+                        documentId={documentId}
+                        readOnly={doc.status !== "DRAFT"}
+                        fields={doc.fields}
+                        updatedAt={doc.updatedAt}
+                        pdfVariant={hasSignedPdf ? "signed" : "original"}
+                      />
+                    </PdfShellErrorBoundary>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent
+                value="activity"
+                forceMount
+                className="data-[state=inactive]:hidden"
+              >
+                <Card className="shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Activity</CardTitle>
+                    <CardDescription>
+                      Every action on this document, newest first.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <DocumentActivityTimeline
+                      entries={doc.auditLogs}
+                      recipient={recipient ?? null}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
 
           <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
