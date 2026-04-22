@@ -673,6 +673,15 @@ function FilterBar({
 // Documents table
 // ---------------------------------------------------------------------------
 
+// Fixed column widths so page-to-page layout is stable regardless of how
+// long the titles are. The Title column is pinned to the left via
+// `position: sticky`; everything to the right of it scrolls horizontally
+// inside the card. The `pl-6 / pr-6` edge padding lives on the sticky cell
+// itself so it travels with the scroll.
+const STICKY_TITLE = "sticky left-0 z-20 bg-card shadow-[1px_0_0_0_var(--color-border)]";
+const STICKY_TITLE_CELL =
+  "sticky left-0 z-10 bg-card group-hover:bg-muted/50 shadow-[1px_0_0_0_var(--color-border)]";
+
 function DocumentsTable({
   docs,
   emptyHint,
@@ -682,30 +691,41 @@ function DocumentsTable({
 }): JSX.Element {
   return (
     <Card className="shadow-sm">
-      <CardContent className="overflow-x-auto p-0">
+      <CardContent className="p-0">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-caption text-muted-foreground pl-6">
+              <TableHead
+                className={cn(
+                  "text-caption text-muted-foreground pl-6 min-w-[280px]",
+                  STICKY_TITLE
+                )}
+              >
                 Title
               </TableHead>
-              <TableHead className="text-caption text-muted-foreground hidden md:table-cell">
+              <TableHead className="text-caption text-muted-foreground min-w-[200px]">
                 Recipient
               </TableHead>
-              <TableHead className="text-caption text-muted-foreground">
+              <TableHead className="text-caption text-muted-foreground min-w-[240px]">
+                Email
+              </TableHead>
+              <TableHead className="text-caption text-muted-foreground min-w-[140px]">
                 Status
               </TableHead>
-              <TableHead className="text-caption text-muted-foreground hidden md:table-cell">
+              <TableHead className="text-caption text-muted-foreground min-w-[220px]">
                 Last activity
               </TableHead>
-              <TableHead className="pr-6 text-right" aria-label="Actions" />
+              <TableHead
+                className="pr-6 text-right min-w-[104px]"
+                aria-label="Actions"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
             {docs.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="text-muted-foreground py-12 text-center text-body"
                 >
                   {emptyHint}
@@ -726,10 +746,8 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
   const queryClient = useQueryClient();
   const [voidOpen, setVoidOpen] = React.useState(false);
   const lastActivity = lastActivityIso(doc);
-  const lastActivityLabel = lastActivity ? relativeTime(lastActivity) : "—";
-  const lastActivityFull = lastActivity
-    ? new Date(lastActivity).toLocaleString()
-    : undefined;
+  const lastActivityLabel = lastActivity ? absoluteLocalTime(lastActivity) : "—";
+  const lastActivityRelative = lastActivity ? relativeTime(lastActivity) : undefined;
 
   const remindable = doc.status === "SENT" || doc.status === "VIEWED";
   // HIPAA + audit integrity: we never hard-delete a signed document. Void is
@@ -782,10 +800,13 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
 
   return (
     <TableRow className="group">
-      <TableCell className="pl-6 text-body-sm">
+      <TableCell
+        className={cn("pl-6 text-body-sm min-w-[280px]", STICKY_TITLE_CELL)}
+        title={doc.title}
+      >
         <Link
           href={`/dashboard/documents/${doc.id}`}
-          className="text-foreground hover:text-primary inline-flex items-center gap-2 font-medium underline-offset-4 hover:underline"
+          className="text-foreground hover:text-primary flex items-center gap-2 font-medium underline-offset-4 hover:underline"
         >
           <FileText
             className="text-muted-foreground h-4 w-4 shrink-0"
@@ -795,38 +816,52 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
           <span className="truncate">{doc.title}</span>
         </Link>
       </TableCell>
-      <TableCell className="hidden md:table-cell">
+      <TableCell className="min-w-[200px]">
         {doc.recipient ? (
           <div className="flex min-w-0 items-center gap-2">
             <Avatar size="sm">
               <AvatarFallback>{initials(doc.recipient.name)}</AvatarFallback>
             </Avatar>
-            <div className="min-w-0">
-              <p className="text-body-sm text-foreground truncate">
-                {doc.recipient.name}
-              </p>
-              <p className="text-caption text-muted-foreground truncate">
-                {doc.recipient.email}
-              </p>
-            </div>
+            <span
+              className="text-body-sm text-foreground truncate"
+              title={doc.recipient.name}
+            >
+              {doc.recipient.name}
+            </span>
           </div>
         ) : (
           <span className="text-muted-foreground text-body-sm">—</span>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell
+        className="text-body-sm text-muted-foreground min-w-[240px]"
+        title={doc.recipient?.email ?? undefined}
+      >
+        {doc.recipient ? (
+          <a
+            href={`mailto:${doc.recipient.email}`}
+            className="hover:text-foreground truncate underline-offset-4 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {doc.recipient.email}
+          </a>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </TableCell>
+      <TableCell className="min-w-[140px]">
         <StatusBadge status={doc.status} />
       </TableCell>
       <TableCell
-        className="text-body-sm text-muted-foreground hidden md:table-cell"
-        title={lastActivityFull}
+        className="text-body-sm text-muted-foreground min-w-[220px] tabular-nums"
+        title={lastActivityRelative}
       >
         <span className="inline-flex items-center gap-1.5">
-          <Clock className="h-3.5 w-3.5" aria-hidden />
+          <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
           {lastActivityLabel}
         </span>
       </TableCell>
-      <TableCell className="pr-6 text-right">
+      <TableCell className="pr-6 text-right min-w-[104px]">
         <div className="inline-flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1390,4 +1425,23 @@ function relativeTime(iso: string): string {
   if (abs < 604800) return rtf.format(Math.round(diffSec / 86400), "day");
   if (abs < 2629800) return rtf.format(Math.round(diffSec / 604800), "week");
   return rtf.format(Math.round(diffSec / 2629800), "month");
+}
+
+// Mirrors formatAbsoluteLocal in document-activity-timeline.tsx so the grid
+// and the audit timeline speak the same dialect: a fixed local datetime with
+// an explicit timezone rather than a moving "X hours ago" target.
+const ABSOLUTE_LOCAL_FMT = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZoneName: "short",
+});
+
+function absoluteLocalTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return ABSOLUTE_LOCAL_FMT.format(d);
 }
