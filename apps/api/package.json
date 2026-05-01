@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "echo \"noop\"",
+    "test": "prisma generate && vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
@@ -49,6 +49,7 @@
     "eslint": "^8.57.1",
     "prisma": "^6.8.2",
     "tsx": "^4.19.3",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
   }
 }
