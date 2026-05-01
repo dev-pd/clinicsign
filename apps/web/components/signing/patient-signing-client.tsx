@@ -133,8 +133,8 @@ function FieldOverlayContent({
   }
 
   if (type === "SIGNATURE" && value.startsWith("data:image")) {
-    // eslint-disable-next-line @next/next/no-img-element -- data URL, no domain to allowlist
     return (
+      // eslint-disable-next-line @next/next/no-img-element -- data: URL signature preview
       <img
         src={value}
         alt="Your signature"

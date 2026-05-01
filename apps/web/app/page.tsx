@@ -460,9 +460,9 @@ function SecuritySection(): JSX.Element {
             <span className="text-primary">because it does.</span>
           </h2>
           <p className="text-body-lg text-muted-foreground mt-4">
-            HIPAA posture isn't a feature flag, it's the architecture. Private
-            networking, encrypted storage, short-lived URLs, and a full audit
-            log come standard on every document.
+            HIPAA posture isn&apos;t a feature flag, it&apos;s the architecture.
+            Private networking, encrypted storage, short-lived URLs, and a full
+            audit log come standard on every document.
           </p>
         </div>
         <ul className="space-y-3">

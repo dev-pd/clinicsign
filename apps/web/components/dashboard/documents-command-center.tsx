@@ -105,7 +105,6 @@ export function DocumentsCommandCenter(
   const [filter, setFilter] = React.useState<FilterKey>("all");
   const [chip, setChip] = React.useState<ChipKey | null>(null);
   const [query, setQuery] = React.useState("");
-  const [page, setPage] = React.useState(1);
 
   const { data, isPending, error } = useQuery({
     queryKey: ["documents", 1, FETCH_LIMIT],
@@ -140,19 +139,7 @@ export function DocumentsCommandCenter(
     });
   }, [docs, filter, chip, query]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageDocs = useMemo(
-    () =>
-      filteredDocs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filteredDocs, safePage]
-  );
-
-  // Snap back to page 1 whenever the user narrows the list — otherwise
-  // they can end up on a "page" that no longer exists after filtering.
-  React.useEffect(() => {
-    setPage(1);
-  }, [filter, chip, query]);
+  const paginationResetKey = `${filter}:${chip ?? ""}:${query}`;
 
   if (!isLoaded || isPending) {
     return <CommandCenterSkeleton />;
@@ -231,21 +218,14 @@ export function DocumentsCommandCenter(
                 onQueryChange={setQuery}
               />
 
-              <DocumentsTable
-                docs={pageDocs}
+              <PaginatedDocumentsBlock
+                key={paginationResetKey}
+                filteredDocs={filteredDocs}
                 emptyHint={
                   chip || filter !== "all" || query.trim().length > 0
                     ? "No documents match the current filter."
                     : "No documents yet."
                 }
-              />
-
-              <PaginationFooter
-                page={safePage}
-                totalPages={totalPages}
-                total={filteredDocs.length}
-                pageSize={PAGE_SIZE}
-                onPageChange={setPage}
               />
 
               {data.total > docs.length ? (
@@ -266,6 +246,35 @@ export function DocumentsCommandCenter(
   );
 }
 
+function PaginatedDocumentsBlock({
+  filteredDocs,
+  emptyHint,
+}: {
+  filteredDocs: ApiDocumentListItem[];
+  emptyHint: string;
+}): JSX.Element {
+  const [page, setPage] = React.useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageDocs = useMemo(
+    () =>
+      filteredDocs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filteredDocs, safePage]
+  );
+
+  return (
+    <>
+      <DocumentsTable docs={pageDocs} emptyHint={emptyHint} />
+      <PaginationFooter
+        page={safePage}
+        totalPages={totalPages}
+        total={filteredDocs.length}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+      />
+    </>
+  );
+}
 
 function RoadmapNotice(): JSX.Element {
   return (
