@@ -160,6 +160,14 @@ export function DocumentDetailView({
       const token = await getToken();
       return fetchDocumentDetail(token, documentId);
     },
+    /** Recipient can open/sign while this tab stays open; poll until terminal states. */
+    refetchInterval: (q) => {
+      const status = q.state.data?.document.status;
+      if (status === "SENT" || status === "VIEWED") {
+        return 15_000;
+      }
+      return false;
+    },
   });
 
   const sendForm = useForm<SendFormValues>({
@@ -194,7 +202,10 @@ export function DocumentDetailView({
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["document", documentId], data);
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["documents"],
+        refetchType: "all",
+      });
       toast.success("Invitation resent with a new link");
     },
     onError: (err) => {
@@ -210,8 +221,14 @@ export function DocumentDetailView({
       return voidDocument(token, documentId);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["document", documentId],
+        refetchType: "all",
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["documents"],
+        refetchType: "all",
+      });
       toast.success("Document voided");
       setVoidOpen(false);
     },

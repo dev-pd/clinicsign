@@ -770,7 +770,10 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
           ? `Delivered to ${doc.recipient.email}`
           : undefined,
       });
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["documents"],
+        refetchType: "all",
+      });
     },
     onError: (err) => {
       toast.error("Could not send reminder", {
@@ -788,8 +791,14 @@ function DocumentRow({ doc }: { doc: ApiDocumentListItem }): JSX.Element {
     onSuccess: () => {
       toast.success("Document voided");
       setVoidOpen(false);
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
-      void queryClient.invalidateQueries({ queryKey: ["document", doc.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ["documents"],
+        refetchType: "all",
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["document", doc.id],
+        refetchType: "all",
+      });
     },
     onError: (err) => {
       toast.error("Could not void document", {

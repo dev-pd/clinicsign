@@ -405,7 +405,10 @@ export const DocumentPdfEditor = forwardRef<
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["document", documentId], data);
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["documents"],
+        refetchType: "all",
+      });
       toast.success("Fields saved");
     },
     onError: (err) => {

@@ -59,7 +59,10 @@ export function DashboardShell({ children }: DashboardShellProps): JSX.Element {
   const brandName = getProductCopy().brandName;
 
   function refreshDocumentsList(): void {
-    void queryClient.invalidateQueries({ queryKey: ["documents"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["documents"],
+      refetchType: "all",
+    });
     router.refresh();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }

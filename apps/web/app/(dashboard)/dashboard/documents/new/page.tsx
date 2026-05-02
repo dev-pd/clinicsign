@@ -82,7 +82,10 @@ export default function NewDocumentPage(): JSX.Element {
       return createDocument(token, input);
     },
     onSuccess: (res) => {
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["documents"],
+        refetchType: "all",
+      });
       toast.success("Document created");
       router.push(`/dashboard/documents/${res.document.id}`);
     },
