@@ -160,11 +160,18 @@ export function DocumentDetailView({
       const token = await getToken();
       return fetchDocumentDetail(token, documentId);
     },
-    /** Recipient can open/sign while this tab stays open; poll until terminal states. */
+    /**
+     * Polling picks up recipient open/sign without a full refresh. Longer
+     * intervals felt noticeably late (15s worst case after sign). VIEWED is
+     * polled faster because completion is usually seconds away.
+     */
     refetchInterval: (q) => {
       const status = q.state.data?.document.status;
-      if (status === "SENT" || status === "VIEWED") {
-        return 15_000;
+      if (status === "VIEWED") {
+        return 3_000;
+      }
+      if (status === "SENT") {
+        return 8_000;
       }
       return false;
     },
@@ -183,7 +190,10 @@ export function DocumentDetailView({
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["document", documentId], data);
-      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["documents"],
+        refetchType: "all",
+      });
       toast.success("Signing invitation sent");
       sendForm.reset();
       setSendOpen(false);
