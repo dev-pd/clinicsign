@@ -376,7 +376,15 @@ NAT is the biggest single line item. VPC endpoints for S3/ECR/CloudWatch Logs cu
 
 ## 13. The end-to-end deploy lifecycle
 
-A release today is three commands:
+From the **repo root**, with Docker running and AWS CLI credentials (`AWS_PROFILE` optional):
+
+```bash
+AWS_PROFILE=clinicsign npm run deploy:ecs
+```
+
+That runs [`scripts/deploy-api-ecs.sh`](../scripts/deploy-api-ecs.sh): reads **`ecrRepositoryUrl`** and **`awsRegion`** from the active Pulumi stack, logs in to ECR, builds **`linux/amd64`**, pushes **`:latest`**, then **`aws ecs update-service --force-new-deployment`** on **`clinicsign-<stack>-api`**.
+
+Equivalent manual steps:
 
 ```bash
 # 1) Build for x86 (Fargate is amd64; mac default is arm64)

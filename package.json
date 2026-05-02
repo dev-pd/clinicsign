@@ -19,7 +19,8 @@
     "db:generate": "turbo run db:generate --filter=@clinicsign/api",
     "db:seed": "npm run db:seed -w @clinicsign/api",
     "tunnel:api": "ngrok http 4000",
-    "tunnel:api:lt": "localtunnel --port 4000"
+    "tunnel:api:lt": "localtunnel --port 4000",
+    "deploy:ecs": "bash scripts/deploy-api-ecs.sh"
   },
   "devDependencies": {
     "localtunnel": "^2.0.2",
