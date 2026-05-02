@@ -29,9 +29,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const clinic = await prisma.clinic.create({
+  const organization = await prisma.organization.create({
     data: {
-      name: "Demo Clinic",
+      name: "Demo organization",
     },
   });
 
@@ -40,11 +40,11 @@ async function main(): Promise<void> {
       clerkUserId: DEMO_CLERK_USER_ID,
       email: DEMO_EMAIL,
       name: "Demo Provider",
-      clinicId: clinic.id,
+      organizationId: organization.id,
     },
   });
 
-  console.log("Seed OK: demo clinic + user for local development");
+  console.log("Seed OK: demo organization + user for local development");
 }
 
 void main()

@@ -5,7 +5,7 @@ export type ApiDocument = {
   id: string;
   title: string;
   status: DocumentStatus;
-  clinicId: string;
+  organizationId: string;
   createdByUserId: string;
   originalPdfKey: string;
   signedPdfKey: string | null;

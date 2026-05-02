@@ -23,7 +23,7 @@ Two phases. Do not start Phase 2 until Phase 1 is working end-to-end.
 ### Flow 1: Provider signup and login (Clerk-handled)
 
 - Landing page has "Sign in with Google" via Clerk prebuilt components
-- First login creates User + Clinic in our DB via Clerk webhook (user.created event)
+- First login creates User + Organization in our DB via Clerk webhook (user.created event)
 - Subsequent logins find the User by Clerk userId and load clinic context
 - Session managed by Clerk (no JWT work on our side)
 - Logout clears Clerk session
@@ -136,49 +136,49 @@ These will be called out in README as future work:
 
 ```prisma
 model User {
-  id             String   @id @default(uuid())
-  clerkUserId    String   @unique
-  email          String   @unique
-  name           String
-  clinicId       String
-  clinic         Clinic   @relation(fields: [clinicId], references: [id])
-  documents      Document[]
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String        @id @default(uuid())
+  clerkUserId     String        @unique
+  email           String        @unique
+  name            String
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id])
+  documents       Document[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([clerkUserId])
 }
 
-model Clinic {
-  id        String   @id @default(uuid())
+model Organization {
+  id        String     @id @default(uuid())
   name      String
   users     User[]
   documents Document[]
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
 }
 
 model Document {
-  id               String    @id @default(uuid())
-  title            String
-  clinicId         String
-  clinic           Clinic    @relation(fields: [clinicId], references: [id])
-  createdByUserId  String
-  createdBy        User      @relation(fields: [createdByUserId], references: [id])
-  originalPdfKey   String
-  signedPdfKey     String?
-  status           DocumentStatus @default(DRAFT)
+  id                String    @id @default(uuid())
+  title             String
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  createdByUserId   String
+  createdBy         User      @relation(fields: [createdByUserId], references: [id])
+  originalPdfKey    String
+  signedPdfKey      String?
+  status            DocumentStatus @default(DRAFT)
   expiresAt        DateTime?
-  sentAt           DateTime?
-  signedAt         DateTime?
-  voidedAt         DateTime?
-  plainSummary     String?   // Phase 2: AI-generated summary
-  fields           DocumentField[]
-  recipients       DocumentRecipient[]
-  auditLogs        AuditLog[]
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  sentAt            DateTime?
+  signedAt          DateTime?
+  voidedAt          DateTime?
+  plainSummary      String?   // Phase 2: AI-generated summary
+  fields            DocumentField[]
+  recipients        DocumentRecipient[]
+  auditLogs         AuditLog[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  @@index([clinicId, status])
+  @@index([organizationId, status])
   @@index([createdByUserId])
 }
 
@@ -405,9 +405,9 @@ clinicsign/
 
 - Use `@clerk/nextjs` in apps/web for frontend
 - Use `@clerk/express` in apps/api for backend (verifies Clerk JWT on each request)
-- Set up a webhook endpoint that receives `user.created` from Clerk to create a User + Clinic in our DB
+- Set up a webhook endpoint that receives `user.created` from Clerk to create a User + Organization in our DB
 - The Clerk user ID is stored on our User row as `clerkUserId` - this is our join key
-- For this MVP: each new Clerk user gets their own Clinic automatically (Clinic name defaults to user's name + "'s Clinic", editable in settings)
+- For this MVP: each new Clerk user gets their own Organization automatically (name defaults to user's name + "'s workspace", editable in settings later)
 - Proxy at `apps/web/proxy.ts` (Next.js 16 naming; Clerk `clerkMiddleware`) protects dashboard routes
 - Public routes: landing, sign-in, sign-up, /sign/:token
 - Clerk provides `<SignIn />`, `<SignUp />`, `<UserButton />` components - use them, don't build custom

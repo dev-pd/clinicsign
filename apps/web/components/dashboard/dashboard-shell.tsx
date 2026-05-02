@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { Logomark } from "@/components/brand/logomark";
+import { getProductCopy } from "@/lib/product";
 import { cn } from "@/lib/utils";
 
 type DashboardShellProps = {
@@ -55,6 +56,7 @@ function NavLink({
 export function DashboardShell({ children }: DashboardShellProps): JSX.Element {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const brandName = getProductCopy().brandName;
 
   function refreshDocumentsList(): void {
     void queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -74,11 +76,11 @@ export function DashboardShell({ children }: DashboardShellProps): JSX.Element {
             <Link
               href={DASHBOARD_HREF}
               className="flex items-center gap-2"
-              aria-label="ClinicSign — go to dashboard"
+              aria-label={`${brandName} — go to dashboard`}
             >
               <Logomark className="h-7 w-7" />
               <span className="text-h4 text-foreground hidden tracking-tight sm:inline">
-                ClinicSign
+                {brandName}
               </span>
             </Link>
             <nav

@@ -14,32 +14,52 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
+import * as React from "react";
 
 import { Logomark } from "@/components/brand/logomark";
 import { Button } from "@/components/ui/button";
+import type { ProductCopy } from "@/lib/product";
+import { getProductCopy } from "@/lib/product";
+
+const TRUST_ICONS = [Lock, ShieldCheck, MailCheck, Sparkles] as const;
+const HOW_ICONS = [Upload, Send, FileSignature] as const;
+
+const FEATURE_ICON_BY_TITLE: Record<
+  string,
+  typeof PenLine | typeof MailCheck | typeof FileSignature | typeof ClipboardList | typeof ShieldCheck | typeof Timer
+> = {
+  "Drag-to-place fields": PenLine,
+  "Magic-link signing": MailCheck,
+  "Flattened signed PDF": FileSignature,
+  "Full audit trail": ClipboardList,
+  "Private by default": ShieldCheck,
+  "Fast enough to demo": Timer,
+  "Fast to try": Timer,
+};
 
 export default function HomePage(): JSX.Element {
+  const product = getProductCopy();
   return (
     <main className="bg-background text-foreground">
-      <SiteNav />
-      <Hero />
-      <TrustBar />
-      <HowItWorks />
-      <FeatureGrid />
-      <SecuritySection />
-      <FinalCta />
-      <SiteFooter />
+      <SiteNav product={product} />
+      <Hero product={product} />
+      <TrustBar product={product} />
+      <HowItWorks product={product} />
+      <FeatureGrid product={product} />
+      <SecuritySection product={product} />
+      <FinalCta product={product} />
+      <SiteFooter product={product} />
     </main>
   );
 }
 
-function SiteNav(): JSX.Element {
+function SiteNav({ product }: { product: ProductCopy }): JSX.Element {
   return (
     <header className="border-border/60 bg-background/80 sticky top-0 z-20 border-b backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 md:px-10">
         <Link href="/" className="flex items-center gap-2">
           <Logomark className="h-7 w-7" />
-          <span className="text-h4 tracking-tight">ClinicSign</span>
+          <span className="text-h4 tracking-tight">{product.brandName}</span>
         </Link>
         <nav className="flex items-center gap-2">
           <SignedOut>
@@ -64,7 +84,8 @@ function SiteNav(): JSX.Element {
   );
 }
 
-function Hero(): JSX.Element {
+function Hero({ product }: { product: ProductCopy }): JSX.Element {
+  const h = product.home;
   return (
     <section className="relative overflow-hidden">
       <BackgroundOrbs />
@@ -72,17 +93,14 @@ function Hero(): JSX.Element {
         <div className="space-y-7">
           <span className="border-border/70 bg-card text-caption text-muted-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 shadow-sm">
             <span className="bg-success inline-block h-1.5 w-1.5 rounded-full" />
-            HIPAA-aware · Built for medical practices
+            {h.heroEyebrow}
           </span>
           <h1 className="text-display text-foreground leading-tight">
-            Sign patient forms in minutes,{" "}
-            <span className="text-primary">not days.</span>
+            {h.heroTitleBeforeAccent}{" "}
+            <span className="text-primary">{h.heroTitleAccent}</span>
           </h1>
           <p className="text-body-lg text-muted-foreground max-w-xl">
-            ClinicSign is the calm, trustworthy alternative to bloated e-sign
-            tools. Upload a PDF, drop fields on it, send a secure link. Your
-            patient signs from any device. You get a flattened, audit-trailed
-            copy in your inbox.
+            {h.heroDescription}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <SignedOut>
@@ -110,13 +128,11 @@ function Hero(): JSX.Element {
               </Button>
             </SignedIn>
           </div>
-          <p className="text-body-sm text-muted-foreground">
-            No credit card. Patients never create an account. Cancel anytime.
-          </p>
+          <p className="text-body-sm text-muted-foreground">{h.heroFootnote}</p>
         </div>
 
         <div className="relative">
-          <ProductIllustration />
+          <ProductIllustration product={product} />
         </div>
       </div>
     </section>
@@ -145,7 +161,11 @@ function BackgroundOrbs(): JSX.Element {
   );
 }
 
-function ProductIllustration(): JSX.Element {
+function ProductIllustration({
+  product,
+}: {
+  product: ProductCopy;
+}): JSX.Element {
   return (
     <div className="relative mx-auto w-full max-w-lg">
       <div
@@ -158,19 +178,17 @@ function ProductIllustration(): JSX.Element {
           <span className="bg-warning/60 h-2.5 w-2.5 rounded-full" />
           <span className="bg-success/60 h-2.5 w-2.5 rounded-full" />
           <span className="text-caption text-muted-foreground ml-3 truncate">
-            Intake form · Jane Doe
+            Agreement · Sample recipient
           </span>
           <span className="bg-success/10 text-success border-success/20 text-micro ml-auto inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 font-medium tracking-wide uppercase">
             <span className="bg-success h-1.5 w-1.5 rounded-full" />
-            Signed
+            Complete
           </span>
         </div>
 
         <div className="space-y-5 px-6 py-7">
           <div>
-            <div className="text-h4 text-foreground">
-              Consent & Intake Agreement
-            </div>
+            <div className="text-h4 text-foreground">Sample document</div>
             <div className="text-body-sm text-muted-foreground mt-1">
               Please review and complete the fields below.
             </div>
@@ -212,7 +230,9 @@ function ProductIllustration(): JSX.Element {
               aria-hidden
             />
             <span className="text-body-sm text-muted-foreground">
-              Flattened copy emailed to patient and provider
+              {product.id === "clinic"
+                ? "Flattened copy emailed to patient and provider"
+                : "Flattened copy emailed to recipient and sender"}
             </span>
           </div>
         </div>
@@ -301,13 +321,11 @@ function SignatureGlyph({ className = "" }: { className?: string }): JSX.Element
   );
 }
 
-function TrustBar(): JSX.Element {
-  const items = [
-    { icon: Lock, label: "Encrypted at rest with AWS KMS" },
-    { icon: ShieldCheck, label: "Private, audit-logged PHI handling" },
-    { icon: MailCheck, label: "Emails via authenticated domain" },
-    { icon: Sparkles, label: "Tamper-evident signed copy" },
-  ];
+function TrustBar({ product }: { product: ProductCopy }): JSX.Element {
+  const items = product.home.trustBarItems.map((label, i) => ({
+    icon: TRUST_ICONS[i] ?? Lock,
+    label,
+  }));
   return (
     <section className="border-border/60 border-y bg-secondary/30">
       <div className="mx-auto grid max-w-6xl gap-4 px-6 py-6 sm:grid-cols-2 md:px-10 lg:grid-cols-4">
@@ -329,30 +347,18 @@ function TrustBar(): JSX.Element {
   );
 }
 
-function HowItWorks(): JSX.Element {
-  const steps = [
-    {
-      icon: Upload,
-      title: "Upload a PDF",
-      body: "Drag in any consent, intake, or release form. Drop signature, date, text, checkbox, and initial fields anywhere on the page.",
-    },
-    {
-      icon: Send,
-      title: "Send a signing link",
-      body: "Enter the patient's name and email. They get a branded, single-use link. No account, no download, nothing to install.",
-    },
-    {
-      icon: FileSignature,
-      title: "Get the signed copy",
-      body: "The patient signs on any device. We flatten the values into the PDF, email both sides, and log every step to the audit trail.",
-    },
-  ];
+function HowItWorks({ product }: { product: ProductCopy }): JSX.Element {
+  const h = product.home;
+  const steps = h.howItWorksSteps.map((s, i) => ({
+    ...s,
+    icon: HOW_ICONS[i] ?? Upload,
+  }));
   return (
     <section className="mx-auto max-w-6xl px-6 py-24 md:px-10">
       <SectionHeader
-        eyebrow="How it works"
-        title="Three steps. That's the whole product."
-        subtitle="No onboarding call. No 40-tab settings area. Open, upload, send."
+        eyebrow={h.howItWorksEyebrow}
+        title={h.howItWorksTitle}
+        subtitle={h.howItWorksSubtitle}
       />
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         {steps.map((s, i) => (
@@ -375,46 +381,19 @@ function HowItWorks(): JSX.Element {
   );
 }
 
-function FeatureGrid(): JSX.Element {
-  const features = [
-    {
-      icon: PenLine,
-      title: "Drag-to-place fields",
-      body: "Signature, text, date, checkbox, initials. Snap them anywhere on any page. Exactly where you already mark a paper form.",
-    },
-    {
-      icon: MailCheck,
-      title: "Magic-link signing",
-      body: "Patients sign with a one-time tokenized link. No app, no sign-up, no password. Works from an email on any phone.",
-    },
-    {
-      icon: FileSignature,
-      title: "Flattened signed PDF",
-      body: "Values are baked into the PDF at sign time. Not a fragile XFDF overlay. You get a real, archivable document.",
-    },
-    {
-      icon: ClipboardList,
-      title: "Full audit trail",
-      body: "Every create, send, view, resend, and sign event is logged with IP, user-agent, and timestamp — ready for your compliance file.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Private by default",
-      body: "PostgreSQL in a private subnet. S3 with KMS encryption. Presigned, short-lived URLs. No direct bucket access from the browser.",
-    },
-    {
-      icon: Timer,
-      title: "Fast enough to demo",
-      body: "Most forms are sent, opened, and signed in under five minutes. The sig pad is smooth on a trackpad and usable with a finger.",
-    },
-  ];
+function FeatureGrid({ product }: { product: ProductCopy }): JSX.Element {
+  const h = product.home;
+  const features = h.featureCards.map((f) => {
+    const Icon = FEATURE_ICON_BY_TITLE[f.title] ?? PenLine;
+    return { ...f, icon: Icon };
+  });
   return (
     <section className="bg-secondary/30 border-border/60 border-y">
       <div className="mx-auto max-w-6xl px-6 py-24 md:px-10">
         <SectionHeader
-          eyebrow="What you get"
-          title="Everything you actually need. Nothing you don't."
-          subtitle="ClinicSign is small on purpose. We shipped the parts that matter and skipped the ones that make demos confusing."
+          eyebrow={h.featureEyebrow}
+          title={h.featureTitle}
+          subtitle={h.featureSubtitle}
         />
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((f) => (
@@ -437,36 +416,26 @@ function FeatureGrid(): JSX.Element {
   );
 }
 
-function SecuritySection(): JSX.Element {
-  const bullets = [
-    "Database in a private VPC subnet, no public access.",
-    "Objects encrypted with a dedicated KMS key. URLs expire in five minutes.",
-    "Single-use signing tokens, hashed at rest, rotated on every resend.",
-    "Immutable audit log per document: who, what, when, from where.",
-    "No PHI in logs. No third-party analytics. No ad pixels.",
-  ];
+function SecuritySection({ product }: { product: ProductCopy }): JSX.Element {
+  const h = product.home;
   return (
     <section className="mx-auto max-w-6xl px-6 py-24 md:px-10">
       <div className="bg-card border-border grid gap-10 rounded-lg border p-8 shadow-sm md:p-12 lg:grid-cols-[1fr_1.25fr] lg:items-center">
         <div>
           <div className="bg-primary/10 text-primary inline-flex items-center gap-2 rounded-full px-3 py-1">
             <ShieldCheck className="h-4 w-4" strokeWidth={2} aria-hidden />
-            <span className="text-caption font-medium">
-              Security · Compliance
-            </span>
+            <span className="text-caption font-medium">{h.securityBadge}</span>
           </div>
           <h2 className="text-h1 text-foreground mt-5">
-            Built like a system that handles PHI —{" "}
-            <span className="text-primary">because it does.</span>
+            {h.securityH2Lead}{" "}
+            <span className="text-primary">{h.securityH2Accent}</span>
           </h2>
           <p className="text-body-lg text-muted-foreground mt-4">
-            HIPAA posture isn&apos;t a feature flag, it&apos;s the architecture.
-            Private networking, encrypted storage, short-lived URLs, and a full
-            audit log come standard on every document.
+            {h.securityIntro}
           </p>
         </div>
         <ul className="space-y-3">
-          {bullets.map((b) => (
+          {h.securityBullets.map((b) => (
             <li
               key={b}
               className="border-border/70 flex items-start gap-3 rounded-md border px-4 py-3"
@@ -485,24 +454,19 @@ function SecuritySection(): JSX.Element {
   );
 }
 
-function FinalCta(): JSX.Element {
+function FinalCta({ product }: { product: ProductCopy }): JSX.Element {
+  const h = product.home;
   return (
-    <section className="mx-auto max-w-6xl px-6 pb-24 md:px-10">
-      <div className="bg-primary text-primary-foreground relative overflow-hidden rounded-lg px-8 py-14 shadow-md md:px-14">
-        <div
-          aria-hidden
-          className="bg-primary-foreground/10 pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="bg-primary-foreground/5 pointer-events-none absolute -bottom-24 -left-10 h-72 w-72 rounded-full blur-3xl"
-        />
+    <section className="mx-auto max-w-6xl px-6 py-24 md:px-10">
+      <div className="bg-primary text-primary-foreground relative overflow-hidden rounded-2xl px-8 py-14 md:px-12 md:py-16">
+        <div className="bg-primary-foreground/15 pointer-events-none absolute -left-16 -top-14 h-72 w-72 rounded-full blur-3xl" />
+        <div className="bg-primary-foreground/10 pointer-events-none absolute -bottom-16 -right-12 h-72 w-72 rounded-full blur-3xl" />
+
         <div className="relative flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
           <div className="max-w-xl">
-            <h2 className="text-h1">Ready to stop chasing paper?</h2>
+            <h2 className="text-h1">{h.finalCtaTitle}</h2>
             <p className="text-body-lg text-primary-foreground/85 mt-3">
-              Create an account in under a minute. Your first document can be
-              signed before your next patient walks in.
+              {h.finalCtaBody}
             </p>
           </div>
           <div>
@@ -531,16 +495,19 @@ function FinalCta(): JSX.Element {
   );
 }
 
-function SiteFooter(): JSX.Element {
+function SiteFooter({ product }: { product: ProductCopy }): JSX.Element {
+  const year = new Date().getFullYear();
   return (
     <footer className="border-border/60 border-t">
       <div className="text-body-sm text-muted-foreground mx-auto flex max-w-6xl flex-col gap-2 px-6 py-8 md:flex-row md:items-center md:justify-between md:px-10">
         <div className="flex items-center gap-2">
           <Logomark className="h-5 w-5" />
-          <span className="text-foreground">ClinicSign</span>
-          <span>· HIPAA-aware document signing</span>
+          <span className="text-foreground">{product.brandName}</span>
+          <span>· {product.home.footerDescriptor}</span>
         </div>
-        <span>© {new Date().getFullYear()} ClinicSign</span>
+        <span>
+          © {year} {product.brandName}
+        </span>
       </div>
     </footer>
   );

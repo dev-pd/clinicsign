@@ -20,8 +20,8 @@ import {
 } from "./s3.service.js";
 import { hashSigningToken } from "./token.service.js";
 
-function objectKeyForSignedPdf(clinicId: string, documentId: string): string {
-  return `clinics/${clinicId}/documents/${documentId}/signed.pdf`;
+function objectKeyForSignedPdf(organizationId: string, documentId: string): string {
+  return `clinics/${organizationId}/documents/${documentId}/signed.pdf`;
 }
 
 export async function resolveRecipientByRawToken(raw: string) {
@@ -31,7 +31,7 @@ export async function resolveRecipientByRawToken(raw: string) {
     include: {
       document: {
         include: {
-          clinic: true,
+          organization: true,
           fields: { orderBy: [{ page: "asc" }, { y: "asc" }] },
         },
       },
@@ -195,11 +195,11 @@ export async function completeSigning(input: {
     }
   }
 
-  const clinicId = doc.clinicId;
+  const organizationId = doc.organizationId;
   const originalKey = doc.originalPdfKey;
   const originalBytes = await getObjectBuffer(originalKey);
   const filledBytes = await renderFieldValuesOntoPdf(originalBytes, doc.fields, updates);
-  const signedKey = objectKeyForSignedPdf(clinicId, doc.id);
+  const signedKey = objectKeyForSignedPdf(organizationId, doc.id);
   await putPdfObject(signedKey, Buffer.from(filledBytes));
 
   const now = new Date();

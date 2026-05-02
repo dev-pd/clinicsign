@@ -23,7 +23,7 @@ function displayName(data: UserJSON, fallbackEmail: string): string {
 }
 
 /**
- * Creates or updates our User (+ Clinic on first create) from Clerk `UserJSON`.
+ * Creates or updates our User (+ Organization on first create) from Clerk `UserJSON`.
  * Used for `user.created` and `user.updated` webhooks.
  */
 export async function syncUserFromClerkPayload(data: UserJSON): Promise<void> {
@@ -47,15 +47,15 @@ export async function syncUserFromClerkPayload(data: UserJSON): Promise<void> {
   }
 
   await prisma.$transaction(async (tx) => {
-    const clinic = await tx.clinic.create({
-      data: { name: `${name}'s Clinic` },
+    const organization = await tx.organization.create({
+      data: { name: `${name}'s workspace` },
     });
     await tx.user.create({
       data: {
         clerkUserId,
         email,
         name,
-        clinicId: clinic.id,
+        organizationId: organization.id,
       },
     });
   });

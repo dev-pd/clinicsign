@@ -59,9 +59,9 @@ Do not substitute these without discussion:
 
 - Frontend: `@clerk/nextjs` with `<ClerkProvider>` in root layout
 - Backend: `@clerk/express` middleware verifies Clerk-issued JWT on each request
-- Webhook: `POST /api/webhooks/clerk` handles `user.created` events to sync User + Clinic rows into our DB
+- Webhook: `POST /api/webhooks/clerk` handles `user.created` events to sync User + Organization rows into our DB
 - Our User row stores `clerkUserId` as a foreign reference
-- On signup, auto-create a Clinic for the user (default name: `{name}'s Clinic`)
+- On signup, auto-create an Organization for the user (default name: `{name}'s workspace`)
 
 **Patient auth is separate.** Patients do NOT use Clerk. They access documents via signed one-time-use JWT tokens sent in the signing email. Token is stored hashed in DB, verified on access, marked as used on signing.
 
@@ -98,8 +98,8 @@ Only these features are in scope. If anything else comes up, confirm before buil
 
 ## Key domain terms
 
-- **Provider**: a user with a Clerk account belonging to a Clinic
-- **Clinic**: the organization a provider belongs to. Data is scoped to clinic
+- **Provider**: a user with a Clerk account belonging to an Organization
+- **Organization**: the tenant a provider belongs to. Data is scoped to `organizationId` (DB model name; product copy may say "clinic" in the healthcare skin)
 - **Patient / Recipient**: the person receiving a document to sign. No account
 - **Document**: a PDF that has been uploaded and may be sent for signature
 - **Field**: a region on a PDF page where a recipient enters data (signature, text, date, etc.)
@@ -125,7 +125,7 @@ Patient pages must have larger tap targets, larger fonts, and one primary action
 Full schema is in `PROJECT.md`. Key points:
 
 - `User` has `clerkUserId` as the join with Clerk
-- `Clinic` auto-created on first signup
+- `Organization` auto-created on first signup
 - `Document` has a status state machine: DRAFT -> SENT -> VIEWED -> SIGNED (with EXPIRED and VOIDED branches)
 - `DocumentField` stores field placement on a PDF
 - `DocumentRecipient` stores signing metadata including hashed token

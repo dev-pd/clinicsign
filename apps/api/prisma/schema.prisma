@@ -8,49 +8,49 @@ datasource db {
 }
 
 model User {
-  id            String     @id @default(uuid())
-  clerkUserId   String     @unique
-  email         String     @unique
-  name          String
-  clinicId      String
-  clinic        Clinic     @relation(fields: [clinicId], references: [id])
-  documents     Document[]
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id              String       @id @default(uuid())
+  clerkUserId     String       @unique
+  email           String       @unique
+  name            String
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  documents       Document[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@index([clerkUserId])
 }
 
-model Clinic {
-  id         String     @id @default(uuid())
-  name       String
-  users      User[]
-  documents  Document[]
-  createdAt  DateTime   @default(now())
+model Organization {
+  id        String     @id @default(uuid())
+  name      String
+  users     User[]
+  documents Document[]
+  createdAt DateTime   @default(now())
 }
 
 model Document {
-  id              String             @id @default(uuid())
-  title           String
-  clinicId        String
-  clinic          Clinic             @relation(fields: [clinicId], references: [id])
-  createdByUserId String
-  createdBy       User               @relation(fields: [createdByUserId], references: [id])
-  originalPdfKey  String
-  signedPdfKey    String?
-  status          DocumentStatus     @default(DRAFT)
-  expiresAt       DateTime?
-  sentAt          DateTime?
-  signedAt        DateTime?
-  voidedAt        DateTime?
-  plainSummary    String?
-  fields          DocumentField[]
-  recipients      DocumentRecipient[]
-  auditLogs       AuditLog[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  id                 String              @id @default(uuid())
+  title              String
+  organizationId     String
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  createdByUserId    String
+  createdBy          User                @relation(fields: [createdByUserId], references: [id])
+  originalPdfKey     String
+  signedPdfKey       String?
+  status             DocumentStatus      @default(DRAFT)
+  expiresAt          DateTime?
+  sentAt             DateTime?
+  signedAt           DateTime?
+  voidedAt           DateTime?
+  plainSummary       String?
+  fields             DocumentField[]
+  recipients         DocumentRecipient[]
+  auditLogs          AuditLog[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
-  @@index([clinicId, status])
+  @@index([organizationId, status])
   @@index([createdByUserId])
 }
 

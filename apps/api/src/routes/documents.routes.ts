@@ -12,16 +12,16 @@ import {
 } from "../schemas/document.schemas.js";
 import { sendDocumentBodySchema } from "../schemas/send.schemas.js";
 import {
-  resendDocumentForClinic,
-  sendDocumentForClinic,
+  resendDocumentForOrganization,
+  sendDocumentForOrganization,
 } from "../services/document-send.service.js";
 import { getPresignedDownloadUrl } from "../services/s3.service.js";
 import {
   createDraftDocument,
   getDocumentScoped,
-  listDocumentsForClinic,
-  patchDocumentForClinic,
-  voidDocumentForClinic,
+  listDocumentsForOrganization,
+  patchDocumentForOrganization,
+  voidDocumentForOrganization,
 } from "../services/documents.service.js";
 import { badRequest } from "../utils/errors.js";
 
@@ -62,7 +62,7 @@ documentsRouter.get(
     }
     const user = req.appUser!;
     const q = parsed.data;
-    const { rows, total } = await listDocumentsForClinic(user.clinicId, {
+    const { rows, total } = await listDocumentsForOrganization(user.organizationId, {
       page: q.page,
       limit: q.limit,
       ...(q.status !== undefined ? { status: q.status } : {}),
@@ -97,7 +97,7 @@ documentsRouter.post(
     }
 
     const doc = await createDraftDocument({
-      clinicId: user.clinicId,
+      organizationId: user.organizationId,
       createdByUserId: user.id,
       title: bodyParsed.data.title,
       pdf: file.buffer,
@@ -115,7 +115,7 @@ documentsRouter.get(
       throw params.error;
     }
     const user = req.appUser!;
-    const doc = await getDocumentScoped(params.data.id, user.clinicId);
+    const doc = await getDocumentScoped(params.data.id, user.organizationId);
     res.json({ entries: doc.auditLogs });
   })
 );
@@ -132,7 +132,7 @@ documentsRouter.get(
       throw query.error;
     }
     const user = req.appUser!;
-    const doc = await getDocumentScoped(params.data.id, user.clinicId);
+    const doc = await getDocumentScoped(params.data.id, user.organizationId);
     const key =
       query.data.type === "original" ? doc.originalPdfKey : doc.signedPdfKey;
     if (!key) {
@@ -158,9 +158,9 @@ documentsRouter.post(
       throw body.error;
     }
     const user = req.appUser!;
-    const updated = await sendDocumentForClinic(
+    const updated = await sendDocumentForOrganization(
       params.data.id,
-      user.clinicId,
+      user.organizationId,
       user.id,
       body.data
     );
@@ -181,9 +181,9 @@ documentsRouter.post(
       throw params.error;
     }
     const user = req.appUser!;
-    const updated = await resendDocumentForClinic(
+    const updated = await resendDocumentForOrganization(
       params.data.id,
-      user.clinicId,
+      user.organizationId,
       user.id
     );
     res.status(200).json({
@@ -207,7 +207,7 @@ documentsRouter.patch(
       throw parsed.error;
     }
     const user = req.appUser!;
-    const patchInput: Parameters<typeof patchDocumentForClinic>[2] = {};
+    const patchInput: Parameters<typeof patchDocumentForOrganization>[2] = {};
     if (parsed.data.title !== undefined) {
       patchInput.title = parsed.data.title;
     }
@@ -217,9 +217,9 @@ documentsRouter.patch(
         recipientId: f.recipientId,
       }));
     }
-    const updated = await patchDocumentForClinic(
+    const updated = await patchDocumentForOrganization(
       params.data.id,
-      user.clinicId,
+      user.organizationId,
       patchInput
     );
     res.json({
@@ -239,9 +239,9 @@ documentsRouter.delete(
       throw params.error;
     }
     const user = req.appUser!;
-    const doc = await voidDocumentForClinic(
+    const doc = await voidDocumentForOrganization(
       params.data.id,
-      user.clinicId,
+      user.organizationId,
       user.id
     );
     res.json({ document: doc });
@@ -256,7 +256,7 @@ documentsRouter.get(
       throw params.error;
     }
     const user = req.appUser!;
-    const doc = await getDocumentScoped(params.data.id, user.clinicId);
+    const doc = await getDocumentScoped(params.data.id, user.organizationId);
     res.json({
       document: {
         ...doc,

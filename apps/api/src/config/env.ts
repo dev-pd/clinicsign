@@ -34,6 +34,8 @@ const envSchema = z.object({
   WEB_APP_URL: z.string().url(),
   JWT_SIGNING_SECRET: z.string().min(32),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]),
+  /** Shown in provider notification emails (e.g. "Open in …"). */
+  APP_PUBLIC_NAME: z.string().min(1).default("ClinicSign"),
 });
 
 function loadEnv(): z.infer<typeof envSchema> {

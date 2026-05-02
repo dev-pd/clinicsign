@@ -21,6 +21,7 @@ import type {
   ApiAuditEntry,
   ApiDocumentRecipient,
 } from "@/lib/api-types";
+import { getProductCopy } from "@/lib/product";
 import { cn } from "@/lib/utils";
 
 /**
@@ -146,7 +147,7 @@ function actorDisplay(
     return recipient?.name ?? "Recipient";
   }
   if (entry.actorType === "PROVIDER") {
-    return "Clinician";
+    return getProductCopy().activity.providerActorLabel;
   }
   return "System";
 }

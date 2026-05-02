@@ -12,16 +12,14 @@ import {
 
 import { getDocumentScoped } from "./documents.service.js";
 
-export async function sendDocumentForClinic(
+export async function sendDocumentForOrganization(
   documentId: string,
-  clinicId: string,
+  organizationId: string,
   actorUserId: string,
   input: { recipientName: string; recipientEmail: string }
-): Promise<
-  Awaited<ReturnType<typeof getDocumentScoped>>
-> {
+): Promise<Awaited<ReturnType<typeof getDocumentScoped>>> {
   const doc = await prisma.document.findFirst({
-    where: { id: documentId, clinicId },
+    where: { id: documentId, organizationId },
     include: { recipients: true },
   });
 
@@ -85,16 +83,16 @@ export async function sendDocumentForClinic(
     signingUrl,
   });
 
-  return getDocumentScoped(doc.id, clinicId);
+  return getDocumentScoped(doc.id, organizationId);
 }
 
-export async function resendDocumentForClinic(
+export async function resendDocumentForOrganization(
   documentId: string,
-  clinicId: string,
+  organizationId: string,
   actorUserId: string
 ): Promise<Awaited<ReturnType<typeof getDocumentScoped>>> {
   const doc = await prisma.document.findFirst({
-    where: { id: documentId, clinicId },
+    where: { id: documentId, organizationId },
     include: { recipients: true },
   });
 
@@ -146,5 +144,5 @@ export async function resendDocumentForClinic(
     signingUrl,
   });
 
-  return getDocumentScoped(doc.id, clinicId);
+  return getDocumentScoped(doc.id, organizationId);
 }

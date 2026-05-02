@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { DocumentsCommandCenter } from "@/components/dashboard/documents-command-center";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getProductCopy } from "@/lib/product";
 import { getServerApiBaseUrl } from "@/lib/server-api";
 
 type MeResponse = {
@@ -10,11 +11,12 @@ type MeResponse = {
     id: string;
     name: string;
     email: string;
-    clinic: { name: string };
+    organization: { id: string; name: string };
   };
 };
 
 export default async function DashboardPage(): Promise<JSX.Element> {
+  const product = getProductCopy();
   const { getToken } = await auth();
   const token = await getToken();
   const res = await fetch(`${getServerApiBaseUrl()}/api/me`, {
@@ -29,7 +31,7 @@ export default async function DashboardPage(): Promise<JSX.Element> {
         <DocumentsCommandCenter
           welcome={{
             name: data.user.name,
-            clinic: data.user.clinic.name,
+            organizationName: data.user.organization.name,
           }}
         />
       </DashboardShell>
@@ -41,15 +43,15 @@ export default async function DashboardPage(): Promise<JSX.Element> {
       <DashboardShell>
         <Card className="border-warning/40 bg-warning/10">
           <CardHeader>
-            <CardTitle>Syncing your account</CardTitle>
+            <CardTitle>{product.dashboard.syncCardTitle}</CardTitle>
           </CardHeader>
           <CardContent className="text-body text-muted-foreground">
             <p>
-              Your Clerk session is active, but your ClinicSign profile is not in our database yet.
-              For new signups this is usually the Clerk webhook creating your clinic — confirm the
-              Clerk webhook endpoint reaches{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">POST /api/webhooks/clerk</code>{" "}
-              and retry in a moment.
+              {product.dashboard.syncCardBodyBeforeWebhook}{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                POST /api/webhooks/clerk
+              </code>{" "}
+              {product.dashboard.syncCardBodyAfterWebhook}
             </p>
           </CardContent>
         </Card>

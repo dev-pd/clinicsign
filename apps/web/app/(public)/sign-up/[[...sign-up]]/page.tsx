@@ -3,10 +3,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { clerkAppearance } from "@/lib/clerk-appearance";
+import { getProductCopy } from "@/lib/product";
 
-export const metadata: Metadata = {
-  title: "Create account · ClinicSign",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const p = getProductCopy();
+  return { title: p.auth.signUpTitle };
+}
 
 export default function SignUpPage(): JSX.Element {
   return (

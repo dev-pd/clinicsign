@@ -16,7 +16,7 @@ async function getMe(req: Request, res: Response, next: NextFunction): Promise<v
 
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      include: { clinic: true },
+      include: { organization: true },
     });
 
     if (!user) {
@@ -32,7 +32,10 @@ async function getMe(req: Request, res: Response, next: NextFunction): Promise<v
         clerkUserId: user.clerkUserId,
         email: user.email,
         name: user.name,
-        clinic: { id: user.clinic.id, name: user.clinic.name },
+        organization: {
+          id: user.organization.id,
+          name: user.organization.name,
+        },
       },
     });
   } catch (err) {

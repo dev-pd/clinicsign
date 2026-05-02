@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, createDocument } from "@/lib/api-client";
+import { getProductCopy } from "@/lib/product";
 import { cn } from "@/lib/utils";
 
 const titleSchema = z.object({
@@ -205,7 +206,7 @@ export default function NewDocumentPage(): JSX.Element {
               />
               <p className="text-caption text-muted-foreground">
                 <span className="text-foreground font-medium">Private.</span>{" "}
-                PDFs are stored encrypted and only accessible to your clinic.
+                {getProductCopy().documents.newUploadStorageNote}
               </p>
             </div>
             <div className="flex items-center gap-3 sm:justify-end">

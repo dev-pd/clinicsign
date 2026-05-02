@@ -3,12 +3,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { clerkAppearance } from "@/lib/clerk-appearance";
+import { getProductCopy } from "@/lib/product";
 
-export const metadata: Metadata = {
-  title: "Sign in · ClinicSign",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const p = getProductCopy();
+  return { title: p.auth.signInTitle };
+}
 
 export default function SignInPage(): JSX.Element {
+  const p = getProductCopy();
   return (
     <div className="space-y-6">
       <div className="space-y-1.5">
@@ -28,7 +31,7 @@ export default function SignInPage(): JSX.Element {
       />
 
       <p className="text-body-sm text-muted-foreground text-center">
-        New to ClinicSign?{" "}
+        {p.auth.signUpPrompt}{" "}
         <Link
           href="/sign-up"
           className="text-primary font-medium underline-offset-4 hover:underline"

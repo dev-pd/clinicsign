@@ -13,8 +13,12 @@ import { badRequest, notFound } from "../utils/errors.js";
 import { appendAuditLog } from "./audit.service.js";
 import { putPdfObject } from "./s3.service.js";
 
-export function objectKeyForOriginalPdf(clinicId: string, documentId: string): string {
-  return `clinics/${clinicId}/documents/${documentId}/original.pdf`;
+/** S3 prefix remains `clinics/` for existing deployments; id is the organization (tenant) id. */
+export function objectKeyForOriginalPdf(
+  organizationId: string,
+  documentId: string
+): string {
+  return `clinics/${organizationId}/documents/${documentId}/original.pdf`;
 }
 
 /**
@@ -33,14 +37,14 @@ export type DocumentListRow = Document & {
   recipient: DocumentListRecipient | null;
 };
 
-export async function listDocumentsForClinic(
-  clinicId: string,
+export async function listDocumentsForOrganization(
+  organizationId: string,
   query: { status?: DocumentStatus; page: number; limit: number }
 ): Promise<{
   rows: DocumentListRow[];
   total: number;
 }> {
-  const where: Prisma.DocumentWhereInput = { clinicId };
+  const where: Prisma.DocumentWhereInput = { organizationId };
   if (query.status) {
     where.status = query.status;
   }
@@ -75,14 +79,14 @@ export async function listDocumentsForClinic(
 
 export async function getDocumentScoped(
   documentId: string,
-  clinicId: string
+  organizationId: string
 ): Promise<
   Prisma.DocumentGetPayload<{
     include: { fields: true; recipients: true; auditLogs: true };
   }>
 > {
   const doc = await prisma.document.findFirst({
-    where: { id: documentId, clinicId },
+    where: { id: documentId, organizationId },
     include: {
       fields: { orderBy: [{ page: "asc" }, { y: "asc" }] },
       recipients: true,
@@ -96,20 +100,20 @@ export async function getDocumentScoped(
 }
 
 export async function createDraftDocument(input: {
-  clinicId: string;
+  organizationId: string;
   createdByUserId: string;
   title: string;
   pdf: Buffer;
 }): Promise<Document> {
   const id = randomUUID();
-  const key = objectKeyForOriginalPdf(input.clinicId, id);
+  const key = objectKeyForOriginalPdf(input.organizationId, id);
   await putPdfObject(key, input.pdf);
 
   const doc = await prisma.document.create({
     data: {
       id,
       title: input.title,
-      clinicId: input.clinicId,
+      organizationId: input.organizationId,
       createdByUserId: input.createdByUserId,
       originalPdfKey: key,
       status: DocumentStatus.DRAFT,
@@ -136,9 +140,9 @@ function assertCanEditMetadata(status: DocumentStatus): void {
   }
 }
 
-export async function patchDocumentForClinic(
+export async function patchDocumentForOrganization(
   documentId: string,
-  clinicId: string,
+  organizationId: string,
   body: {
     title?: string;
     fields?: Array<{
@@ -158,7 +162,7 @@ export async function patchDocumentForClinic(
   }>
 > {
   const existing = await prisma.document.findFirst({
-    where: { id: documentId, clinicId },
+    where: { id: documentId, organizationId },
     include: { fields: true, recipients: true, auditLogs: true },
   });
 
@@ -211,16 +215,16 @@ export async function patchDocumentForClinic(
     }
   });
 
-  return getDocumentScoped(documentId, clinicId);
+  return getDocumentScoped(documentId, organizationId);
 }
 
-export async function voidDocumentForClinic(
+export async function voidDocumentForOrganization(
   documentId: string,
-  clinicId: string,
+  organizationId: string,
   actorUserId: string
 ): Promise<Document> {
   const existing = await prisma.document.findFirst({
-    where: { id: documentId, clinicId },
+    where: { id: documentId, organizationId },
   });
 
   if (!existing) {

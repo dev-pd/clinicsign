@@ -54,7 +54,7 @@ export async function sendDocumentSignedToProvider(input: {
         <p>Hi ${escapeHtml(input.providerName)},</p>
         <p><strong>${escapeHtml(input.documentTitle)}</strong> has been signed by the recipient.</p>
         <p><a href="${input.signedPdfUrl}">Download signed PDF</a> (link expires in 7 days)</p>
-        <p><a href="${input.documentUrl}">Open in ClinicSign</a></p>
+        <p><a href="${input.documentUrl}">Open in ${escapeHtml(env.APP_PUBLIC_NAME)}</a></p>
       `,
     }),
   });

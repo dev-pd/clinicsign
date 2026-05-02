@@ -58,6 +58,7 @@ import {
   resendDocument,
   voidDocument,
 } from "@/lib/api-client";
+import { getProductCopy } from "@/lib/product";
 import { cn } from "@/lib/utils";
 import type { DocumentStatus } from "@clinicsign/shared-types";
 
@@ -89,7 +90,7 @@ export type DocumentsCommandCenterProps = {
   // Kept for future greeting surfaces (toasts, onboarding, etc). The page
   // header intentionally no longer renders the welcome block — the grid is
   // the focus, not a greeting.
-  welcome: { name: string; clinic: string };
+  welcome: { name: string; organizationName: string };
 };
 
 const PAGE_SIZE = 10;
@@ -414,7 +415,7 @@ function AskCopilotBar(): JSX.Element {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-body-sm text-foreground font-medium">
-            Ask ClinicSign
+            {getProductCopy().dashboard.askAssistantLabel}
           </p>
           <p className="text-caption text-muted-foreground">
             Summarise documents, draft a reminder, or query activity. Arriving

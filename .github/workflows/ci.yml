@@ -19,6 +19,7 @@ jobs:
       NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
       API_URL: http://127.0.0.1:4000
       NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      NEXT_PUBLIC_PRODUCT_SKIN: clinic
 
     steps:
       - name: Checkout
