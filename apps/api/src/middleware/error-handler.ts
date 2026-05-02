@@ -104,6 +104,33 @@ export function errorHandler(
     return;
   }
 
+  if (
+    err instanceof Prisma.PrismaClientUnknownRequestError ||
+    err instanceof Prisma.PrismaClientInitializationError ||
+    err instanceof Prisma.PrismaClientRustPanicError
+  ) {
+    log.error(
+      {
+        err,
+        requestId,
+        message: err instanceof Error ? err.message : String(err),
+      },
+      "Prisma engine error (connectivity, schema drift vs. migrations, or unsupported SQL)"
+    );
+    res.status(503).json({
+      error: {
+        code: "DATABASE_UNAVAILABLE",
+        message:
+          env.NODE_ENV === "production"
+            ? "Database request failed. Check migration status and RDS connectivity in logs."
+            : err instanceof Error
+              ? err.message
+              : "Database request failed.",
+      },
+    });
+    return;
+  }
+
   log.error({ err, requestId }, "Unhandled error");
   res.status(500).json({
     error: {

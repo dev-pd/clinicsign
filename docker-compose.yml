@@ -13,5 +13,7 @@ services:
       dockerfile: apps/api/Dockerfile
     ports:
       - "4001:4000"
+    env_file:
+      - .env
     environment:
       PORT: "4000"

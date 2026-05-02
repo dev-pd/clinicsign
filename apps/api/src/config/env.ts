@@ -14,6 +14,9 @@ function normalizeProcessEnv(): NodeJS.ProcessEnv {
   if (e.AWS_ENDPOINT_URL === "") {
     delete e.AWS_ENDPOINT_URL;
   }
+  if (e.APP_PUBLIC_NAME === "") {
+    delete e.APP_PUBLIC_NAME;
+  }
   return e;
 }
 

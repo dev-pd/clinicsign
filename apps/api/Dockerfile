@@ -8,8 +8,9 @@
 #   docker run -p 4001:4000 clinicsign-api:local
 # Or: `npm run docker:api` (Compose exposes :4001 on the host)
 #
-# Prisma: `npm run build` runs `prisma generate`. Copy `apps/api/prisma` in the
-# runner image if you run `prisma migrate deploy` at container start (add prisma CLI to prod deps or use CI migrations).
+# Prisma: `npm run build` runs `prisma generate`. Container start runs `migrate deploy`
+# then the server (same as ECS task command in `infra/`), so ad-hoc `docker run`
+# without an override still applies pending migrations.
 
 FROM node:20-alpine AS builder
 
@@ -57,4 +58,4 @@ ENV NODE_ENV=production
 
 ENTRYPOINT ["/sbin/tini", "--"]
 
-CMD ["node", "apps/api/dist/server.js"]
+CMD ["sh", "-c", "cd apps/api && ../../node_modules/.bin/prisma migrate deploy && node dist/server.js"]

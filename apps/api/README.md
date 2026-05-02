@@ -99,7 +99,7 @@ apps/api/
 ├── scripts/
 │   └── backfill-users-from-clerk.ts
 ├── tests/                      Vitest scaffold
-└── Dockerfile                  multi-stage; final stage runs migrate then server
+└── Dockerfile                  multi-stage; startup runs `migrate deploy` then server
 ```
 
 ---
@@ -234,6 +234,20 @@ Health check is `GET /health`, returns `{ status: "ok" }`. **It deliberately tou
 - Want Clerk webhooks against your laptop? `npm run tunnel:api` (ngrok) or `npm run tunnel:api:lt` (localtunnel), then register the tunnel URL + `/api/webhooks/clerk` in the Clerk dashboard. **Clerk requires HTTPS — that's why the tunnel exists.**
 - Prisma client out of sync after a pull? `npm run db:generate`.
 - Want to inspect what the API actually returned? Every response error has a `requestId`; grep it in CloudWatch (or local stdout in dev).
+
+---
+
+## Troubleshooting: `GET /api/me` or dashboard "Could not load your profile"
+
+The dashboard calls `GET /api/me` with a Clerk Bearer token. Failures usually fall into one of these buckets:
+
+1. **Database schema behind the code** — After pulling (e.g. `Clinic` → `Organization` rename), run migrations against the same `DATABASE_URL` the API uses:
+   - Local: from repo root or `apps/api`, `npx prisma migrate deploy` (or `npm run db:migrate` for dev).
+   - ECS: the task definition should run `prisma migrate deploy` before `node dist/server.js`; confirm the **deployed image** includes the latest `prisma/migrations/*` files and redeploy if needed.
+2. **Prisma engine errors** — Connection refused, TLS, `relation "Organization" does not exist`, etc. Return **503** with `DATABASE_UNAVAILABLE` and the real message in **non-production** logs. Check CloudWatch (or local Pino output) for the full Prisma error string.
+3. **404 + `USER_NOT_PROVISIONED`** — Clerk user exists but no `User` row yet. Trigger the Clerk webhook (`user.created` / `user.updated`) or wait for sync; the dashboard handles 404 with a specific card.
+4. **Clerk env mismatch** — `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` on the API must be from the **same** Clerk application as the Next.js app that mints the JWT.
+5. **`APP_PUBLIC_NAME` set to empty in ECS** — Treated as invalid by Zod and blocks startup; if your orchestration injects an empty string, remove the variable so the default applies.
 
 ---
 
