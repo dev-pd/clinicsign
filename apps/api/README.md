@@ -77,7 +77,7 @@ apps/api/
 │   │   ├── sign.routes.ts      patient view + complete (token-scoped)
 │   │   └── me.ts               current user (Clerk → DB)
 │   ├── services/
-│   │   ├── documents.service.ts        list / create / patch / void; clinic-scoped
+│   │   ├── documents.service.ts        list / create / patch / void; organization-scoped
 │   │   ├── document-send.service.ts    send + resend orchestration
 │   │   ├── signing.service.ts          token validation, value persistence, completion
 │   │   ├── pdf-field-renderer.ts       overlays patient values onto the original PDF
@@ -86,7 +86,7 @@ apps/api/
 │   │   ├── token.service.ts            random + SHA-256 hash + verify
 │   │   ├── email.service.ts            Resend transport + templates
 │   │   ├── audit.service.ts            single chokepoint for AuditLog inserts
-│   │   └── user-sync.service.ts        Clerk webhook → DB user + clinic
+│   │   └── user-sync.service.ts        Clerk webhook → DB user + organization
 │   ├── schemas/                Zod schemas, one file per resource
 │   ├── utils/
 │   │   └── errors.ts           ApiError class + helpers (badRequest, notFound, …)
@@ -112,7 +112,7 @@ All routes live under `/api`. Auth column: **C** = Clerk JWT (`req.appUser` popu
 |---|---|---|---|
 | `GET` | `/health` | — | ALB target group health check; touches no DB / no S3 |
 | `POST` | `/api/webhooks/clerk` | W | `user.created` / `user.updated` / `user.deleted` → `user-sync.service` |
-| `GET` | `/api/me` | C | current clinician + clinic |
+| `GET` | `/api/me` | C | current clinician + organization |
 | `GET` | `/api/documents` | C | paginated list, filterable by `?status=` |
 | `POST` | `/api/documents` | C | multipart `pdf` + `title` → draft document |
 | `GET` | `/api/documents/:id` | C | full doc with fields, recipients, audit |
@@ -185,9 +185,9 @@ Six models, the interesting indexes called out:
 
 | Model | Notes |
 |---|---|
-| `User` | `clerkUserId @unique`, `clinicId` FK; populated by Clerk webhook |
-| `Clinic` | one per first-login user today; settings come later |
-| `Document` | `status` enum, `originalPdfKey`, `signedPdfKey?`, indexed by `(clinicId, status)` |
+| `User` | `clerkUserId @unique`, `organizationId` FK → `Organization`; populated by Clerk webhook |
+| `Organization` | tenant container; one created per first-time clinician sync today |
+| `Document` | `status` enum, `originalPdfKey`, `signedPdfKey?`, indexed by `(organizationId, status)` |
 | `DocumentField` | `type` enum (`SIGNATURE / TEXT / DATE / CHECKBOX / INITIAL`), `x/y/width/height` as **0–1 percentages** (page-relative — survives any render width) |
 | `DocumentRecipient` | `tokenHash @unique`, `tokenExpiresAt`, optional `signedAt / signedFromIp / signedUserAgent` |
 | `AuditLog` | `actorType` × `eventType`, `metadata Json`, indexed by `(documentId, timestamp)` |
@@ -212,6 +212,8 @@ cd apps/api && ../../node_modules/.bin/prisma migrate deploy && node dist/server
 ```
 
 Migrations run on every task boot. `prisma migrate deploy` is idempotent — it only applies *new* migration files — so this is safe to run on a 2-task rolling deploy. The first task pays the migration latency; the second sees no pending migrations and starts immediately.
+
+The API [`Dockerfile`](./Dockerfile) **`CMD`** matches this startup sequence so **`docker run`** / Compose (without overriding `command`) behaves like ECS.
 
 Health check is `GET /health`, returns `{ status: "ok" }`. **It deliberately touches no downstream**. A healthy task is one that can serve HTTP; if RDS is having a moment, we want the API to stay in the load balancer and surface the issue, not flap and trigger a deploy.
 
@@ -243,7 +245,7 @@ The dashboard calls `GET /api/me` with a Clerk Bearer token. Failures usually fa
 
 1. **Database schema behind the code** — After pulling (e.g. `Clinic` → `Organization` rename), run migrations against the same `DATABASE_URL` the API uses:
    - Local: from repo root or `apps/api`, `npx prisma migrate deploy` (or `npm run db:migrate` for dev).
-   - ECS: the task definition should run `prisma migrate deploy` before `node dist/server.js`; confirm the **deployed image** includes the latest `prisma/migrations/*` files and redeploy if needed.
+   - ECS: runs via task **`command`** on deploy; image **`CMD`** matches — redeploy with **`npm run deploy:ecs`** (repo root) after schema changes.
 2. **Prisma engine errors** — Connection refused, TLS, `relation "Organization" does not exist`, etc. Return **503** with `DATABASE_UNAVAILABLE` and the real message in **non-production** logs. Check CloudWatch (or local Pino output) for the full Prisma error string.
 3. **404 + `USER_NOT_PROVISIONED`** — Clerk user exists but no `User` row yet. Trigger the Clerk webhook (`user.created` / `user.updated`) or wait for sync; the dashboard handles 404 with a specific card.
 4. **Clerk env mismatch** — `CLERK_SECRET_KEY` and `CLERK_PUBLISHABLE_KEY` on the API must be from the **same** Clerk application as the Next.js app that mints the JWT.
@@ -267,7 +269,7 @@ The dashboard calls `GET /api/me` with a Clerk Bearer token. Failures usually fa
 ## What's out of scope today
 
 - Multi-recipient signing order
-- Document templates (clinic-level reusable forms)
+- Document templates (organization-level reusable forms)
 - AI: field auto-detection, plain-language summary, document chat
 - SES as the active email path (Resend works today; SES is policy-attached but unused)
 - Background jobs / queue — every operation is synchronous in the request path

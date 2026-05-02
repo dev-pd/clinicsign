@@ -376,26 +376,32 @@ NAT is the biggest single line item. VPC endpoints for S3/ECR/CloudWatch Logs cu
 
 ## 13. The end-to-end deploy lifecycle
 
-From the **repo root**, with Docker running and AWS CLI credentials (`AWS_PROFILE` optional):
+From the **repo root**, Docker running, AWS credentials available to the CLI (**[`AWS_SETUP_GUIDE.md`](./AWS_SETUP_GUIDE.md)** Step 3 — use `export AWS_PROFILE=<your-profile>` when you do **not** rely on `[default]`):
 
 ```bash
-AWS_PROFILE=clinicsign npm run deploy:ecs
+npm run deploy:ecs
 ```
 
-That runs [`scripts/deploy-api-ecs.sh`](../scripts/deploy-api-ecs.sh): reads **`ecrRepositoryUrl`** and **`awsRegion`** from the active Pulumi stack, logs in to ECR, builds **`linux/amd64`**, pushes **`:latest`**, then **`aws ecs update-service --force-new-deployment`** on **`clinicsign-<stack>-api`**.
+That runs [`scripts/deploy-api-ecs.sh`](../scripts/deploy-api-ecs.sh): reads **`ecrRepositoryUrl`** and **`awsRegion`** from the active Pulumi stack, logs in to ECR, builds **`linux/amd64`**, pushes **`:latest`**, then **`aws ecs update-service --force-new-deployment`** on **`clinicsign-<stack>-api`** (default **`dev`** → cluster **`clinicsign-dev`**, service **`clinicsign-dev-api`**).
 
 Equivalent manual steps:
 
 ```bash
+export AWS_PROFILE=<your-profile>   # omit if [default] works
+
 # 1) Build for x86 (Fargate is amd64; mac default is arm64)
+ECR_URL=$(cd infra && pulumi stack output ecrRepositoryUrl)
 docker buildx build --platform linux/amd64 \
   -t "$ECR_URL:latest" \
   -f apps/api/Dockerfile . --push
 
-# 2) Roll the API tasks (migrations run inside the container)
+# 2) Roll the API tasks (migrate runs in container startup — ECS task command + image CMD)
+STACK=$(cd infra && pulumi stack --show-name)
+REGION=$(cd infra && pulumi stack output awsRegion)
 aws ecs update-service \
-  --cluster clinicsign-dev \
-  --service clinicsign-dev-api \
+  --cluster "clinicsign-${STACK}" \
+  --service "clinicsign-${STACK}-api" \
+  --region "$REGION" \
   --force-new-deployment
 
 # 3) Frontend ships independently via Vercel git push

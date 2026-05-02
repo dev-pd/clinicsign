@@ -72,18 +72,30 @@ You'll use this identity for `aws configure` and `pulumi up` — **not** for the
 
 ## Step 3 — AWS CLI (~5 min)
 
+Install the CLI and store your **admin** access key under a **named profile**. The profile label is **whatever you choose** in `aws configure --profile …` — it does **not** have to match your IAM username, account nickname, or the project name. Older examples used `clinicsign` as a placeholder only.
+
 ```bash
 brew install awscli                 # macOS
 
-aws configure --profile clinicsign
-# Access key + secret from the admin user
-# Region: e.g. us-east-1
-# Output: json
+aws configure list-profiles        # see what already exists (may be empty)
 
-aws sts get-caller-identity --profile clinicsign
+# Pick any profile name, e.g. pd-clinicsign or default-admin
+aws configure --profile YOUR_PROFILE_NAME
+# Access key + secret from the admin IAM user
+# Default region: same as Pulumi (e.g. us-east-1)
+# Output format: json
+
+aws sts get-caller-identity --profile YOUR_PROFILE_NAME
 ```
 
-The **running API** uses the **Pulumi-created IAM user** keys from stack outputs (`iamAccessKeyId` / `iamSecretAccessKey`), not necessarily this admin profile.
+Use that profile for **Pulumi**, **ECR login**, and **`npm run deploy:ecs`**:
+
+- Per command: `AWS_PROFILE=YOUR_PROFILE_NAME pulumi up`
+- Or one shell session: `export AWS_PROFILE=YOUR_PROFILE_NAME`
+
+If you only use **`[default]`** credentials (`aws configure` without `--profile`) and `aws sts get-caller-identity` works with no env vars, you can leave **`AWS_PROFILE` unset** — **`npm run deploy:ecs`** still works.
+
+The **running API** uses the **Pulumi-created IAM user** keys injected into the ECS task (`iamAccessKeyId` / `iamSecretAccessKey` outputs), **not** this admin CLI profile.
 
 ---
 
@@ -109,8 +121,9 @@ npm install
 # (normally DB is ECS-only)
 # pulumi config set rdsAllowedCidr 203.0.113.45/32
 
-AWS_PROFILE=clinicsign pulumi preview
-AWS_PROFILE=clinicsign pulumi up
+# Ensure credentials resolve (see Step 3): e.g. export AWS_PROFILE=YOUR_PROFILE_NAME
+pulumi preview
+pulumi up
 ```
 
 Retrieve outputs:
@@ -140,20 +153,44 @@ npm run db:migrate
 
 ---
 
-## Step 6 — Push the API image to ECR
+## Step 6 — Push the API image to ECR and roll ECS
 
-`infra/` creates an **ECR** repository; build and push from the monorepo root:
+**Preferred:** from **monorepo root**, with Docker running:
 
 ```bash
-ECR_URL=$(cd infra && pulumi stack output ecrRepositoryUrl)
+# Optional if you use a named profile (Step 3):
+export AWS_PROFILE=YOUR_PROFILE_NAME
 
-aws ecr get-login-password --region us-east-1 --profile clinicsign \
+npm run deploy:ecs
+```
+
+That runs **[`scripts/deploy-api-ecs.sh`](../scripts/deploy-api-ecs.sh)** against the **currently selected Pulumi stack** in `infra/`: resolves **`ecrRepositoryUrl`** and **`awsRegion`**, logs in to ECR, **`docker buildx build --platform linux/amd64`** (required on Apple silicon), pushes **`:latest`**, then **`aws ecs update-service --force-new-deployment`** on **`clinicsign-<stack>-api`** (e.g. dev → **`clinicsign-dev`** / **`clinicsign-dev-api`**).
+
+On ECS, the task definition **`command`** runs **`prisma migrate deploy`** then **`node`** (see **`infra/src/index.ts`**). The API [`Dockerfile`](../apps/api/Dockerfile) uses the same startup **`CMD`** so a plain **`docker run`** (no command override) matches that behavior.
+
+**Manual equivalent** (same outcome):
+
+```bash
+# export AWS_PROFILE=YOUR_PROFILE_NAME   # when not using [default]
+
+cd infra
+ECR_URL=$(pulumi stack output ecrRepositoryUrl)
+REGION=$(pulumi stack output awsRegion)
+
+aws ecr get-login-password --region "$REGION" \
   | docker login --username AWS --password-stdin "$ECR_URL"
 
-# Important: --platform linux/amd64 (Fargate is amd64; mac default is arm64)
+cd ..
 docker buildx build --platform linux/amd64 \
   -t "$ECR_URL:latest" \
   -f apps/api/Dockerfile . --push
+
+STACK=$(cd infra && pulumi stack --show-name)
+aws ecs update-service \
+  --cluster "clinicsign-${STACK}" \
+  --service "clinicsign-${STACK}-api" \
+  --region "$REGION" \
+  --force-new-deployment
 ```
 
 ---
@@ -190,7 +227,7 @@ pulumi config set --secret --path 'apiEnvSecret.CLERK_WEBHOOK_SECRET'  'whsec_..
 pulumi config set --secret --path 'apiEnvSecret.RESEND_API_KEY'        're_...'
 pulumi config set --secret --path 'apiEnvSecret.JWT_SIGNING_SECRET'    '<32+ chars>'
 
-AWS_PROFILE=clinicsign pulumi up    # re-renders task definition
+pulumi up    # re-renders task definition; uses AWS creds from Step 3 (e.g. AWS_PROFILE)
 ```
 
 After `pulumi up` you have:
@@ -272,7 +309,8 @@ Postgres and S3 still come from **AWS** (Pulumi outputs), not from Compose.
 
 ```bash
 cd infra
-AWS_PROFILE=clinicsign pulumi destroy
+# export AWS_PROFILE=... if required (Step 3)
+pulumi destroy
 ```
 
 > **Warning**: `skipFinalSnapshot: true` is set on RDS for the dev stack. There is no recovery — snapshot manually first if you care about the data.

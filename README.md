@@ -123,8 +123,9 @@ You can also run the API container on its own: `npm run docker:api`. There's no 
 
 ## Running the app against AWS
 
-The shortest path is described in **[`infra/AWS_SETUP_GUIDE.md`](./infra/AWS_SETUP_GUIDE.md)** — account setup, `pulumi up`, Docker → ECR, Vercel env. After it's standing:
+The shortest path is described in **[`infra/AWS_SETUP_GUIDE.md`](./infra/AWS_SETUP_GUIDE.md)** — account setup, `pulumi up`, Docker → ECR → ECS, Vercel env. After it's standing:
 
+- **`npm run deploy:ecs`** (repo root) — rebuild **`linux/amd64`**, push **`:latest`** to ECR, **`force-new-deployment`** on the API service (see **`scripts/deploy-api-ecs.sh`**). Requires AWS CLI credentials (named profile: `export AWS_PROFILE=…`).
 - `apiBaseUrl` (CloudFront HTTPS URL) → Vercel's `NEXT_PUBLIC_API_URL`
 - `apiBaseUrl/api/webhooks/clerk` → Clerk dashboard webhook endpoint
 - `databaseUrl`, `s3BucketName`, AWS creds → repo-root `.env`
@@ -132,8 +133,10 @@ The shortest path is described in **[`infra/AWS_SETUP_GUIDE.md`](./infra/AWS_SET
 Teardown:
 
 ```bash
-cd infra && AWS_PROFILE=clinicsign pulumi destroy
+cd infra && pulumi destroy
 ```
+
+Use the AWS CLI profile from **`aws configure list-profiles`** if required (`export AWS_PROFILE=…`).
 
 ---
 

@@ -46,18 +46,22 @@ After `pulumi up`, get them with `pulumi stack output --show-secrets`:
 
 ## Deploy / destroy
 
+Use the same AWS credential resolution as **`AWS_SETUP_GUIDE.md`** Step 3 (`export AWS_PROFILE=…` when you use a named profile; omit when **`[default]`** is enough).
+
 ```bash
 cd infra
 npm install
 
-AWS_PROFILE=clinicsign pulumi preview
-AWS_PROFILE=clinicsign pulumi up
+pulumi preview
+pulumi up
 
-# tear down everything (RDS data is lost — set skipFinalSnapshot:false for prod)
-AWS_PROFILE=clinicsign pulumi destroy
+# Tear down everything (RDS data is lost — dev stack uses skipFinalSnapshot)
+pulumi destroy
 ```
 
-Full walkthrough including ECS env-var injection and ECR push: **[`AWS_SETUP_GUIDE.md`](./AWS_SETUP_GUIDE.md)**.
+For **API image → ECR → ECS rollout**, use **`npm run deploy:ecs`** from the **repo root** — see **[AWS_SETUP_GUIDE § Step 6](./AWS_SETUP_GUIDE.md#step-6--push-the-api-image-to-ecr-and-roll-ecs)**.
+
+Full walkthrough including ECS env-var injection: **[`AWS_SETUP_GUIDE.md`](./AWS_SETUP_GUIDE.md)**.
 
 ---
 
@@ -68,7 +72,7 @@ Default is `dev`. For prod:
 ```bash
 pulumi stack init prod
 pulumi config set aws:region us-east-1
-AWS_PROFILE=clinicsign pulumi up --stack prod
+pulumi up --stack prod
 ```
 
 Tighten before any real PHI: drop `rdsAllowedCidr`, drop the legacy IAM user in favor of the task role, switch to Secrets Manager, multi-AZ NAT + `desiredCount ≥ 2`. See **[`ARCHITECTURE.md` §11](./ARCHITECTURE.md#11-what-id-change-for-prod)**.
