@@ -422,6 +422,46 @@ What happens when ECS picks up the new image:
 - **`DATABASE_URL` got dropped** during a `pulumi config` sanitize → same as above, just the DB-shaped instance of it
 - **Health check too aggressive** (container `HEALTHCHECK` competing with ALB) → tasks flap. We removed the container-level healthcheck; see §8
 
+### Admin database access via ECS Exec (preferred over temporary RDS ingress)
+
+RDS stays **private** (no `0.0.0.0/0`, no laptop CIDR on the RDS security group). You connect **AWS Systems Manager Session Manager → ECS Exec → shell inside the API task**, which already has **`DATABASE_URL`** and **`5432`** allowed from **`ecsTaskSg`** to RDS.
+
+Infra enables **`enableExecuteCommand: true`** on the ECS service and attaches **`ssmmessages:*`** to the **task IAM role** (see `infra/src/index.ts`).
+
+**Your laptop**
+
+1. Install [Session Manager plugin for AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
+2. Grant your IAM principal **`ecs:ExecuteCommand`** plus **`ecs:DescribeTasks`**, **`ecs:ListTasks`**, **`ecs:DescribeServices`**, **`ecs:DescribeClusters`** on this cluster/service (narrow ARNs in prod).
+3. Resolve task id and open a shell:
+
+```bash
+export AWS_PROFILE=your-profile
+export CLUSTER=clinicsign-dev
+export SERVICE=clinicsign-dev-api
+export REGION=us-east-1
+
+TASK=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$SERVICE" --region "$REGION" \
+  --query 'taskArns[0]' --output text)
+
+aws ecs execute-command \
+  --cluster "$CLUSTER" \
+  --task "$TASK" \
+  --container api \
+  --interactive \
+  --command "/bin/sh" \
+  --region "$REGION"
+```
+
+4. Inside the container (paths match the API image):
+
+```sh
+cd /app/apps/api && ../../node_modules/.bin/prisma db execute \
+  --schema prisma/schema.prisma \
+  --file scripts/purge-all-documents.sql
+```
+
+**Operational caveat:** ECS Exec is effectively **interactive prod shell access** — gate IAM tightly, enable CloudTrail, and prefer **`db execute`** over hand-editing production unless necessary.
+
 ---
 
 ## 14. Auto-generated Pulumi resource graph

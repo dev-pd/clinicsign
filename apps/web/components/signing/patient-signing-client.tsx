@@ -542,6 +542,26 @@ export function PatientSigningClient({
     return <></>;
   }
 
+  if (view.fields.length === 0) {
+    return (
+      <main
+        data-audience="patient"
+        className="bg-background flex min-h-screen flex-col items-center justify-center p-6"
+      >
+        <Card className="w-full max-w-md border-border/80">
+          <CardHeader>
+            <CardTitle>Nothing to complete</CardTitle>
+            <CardDescription>
+              This document doesn&apos;t include any signature or form fields.
+              Please contact your provider so they can add fields and send a new
+              link.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
+    );
+  }
+
   const requiredFields = view.fields.filter((f) => f.required);
   const requiredTotal = requiredFields.length;
   const filledRequired = requiredFields.filter((f) =>

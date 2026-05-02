@@ -13,7 +13,15 @@ import {
   Type,
   UserRound,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Document, Page } from "react-pdf";
 
 import { Button } from "@/components/ui/button";
@@ -252,15 +260,27 @@ export type DocumentPdfEditorProps = {
    *   has the patient's values baked in. Overlays are suppressed.
    */
   pdfVariant?: "original" | "signed";
+  onFieldCountChange?: (count: number) => void;
 };
 
-export function DocumentPdfEditor({
-  documentId,
-  readOnly,
-  fields: serverFields,
-  updatedAt,
-  pdfVariant = "original",
-}: DocumentPdfEditorProps): JSX.Element {
+export type DocumentPdfEditorHandle = {
+  flushFields: () => Promise<void>;
+};
+
+export const DocumentPdfEditor = forwardRef<
+  DocumentPdfEditorHandle,
+  DocumentPdfEditorProps
+>(function DocumentPdfEditor(
+  {
+    documentId,
+    readOnly,
+    fields: serverFields,
+    updatedAt,
+    pdfVariant = "original",
+    onFieldCountChange,
+  },
+  ref
+): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   // Mobile-safe default for SSR (no DOM). The callback ref on the host
@@ -372,6 +392,10 @@ export function DocumentPdfEditor({
     [fields, serverModel]
   );
 
+  useEffect(() => {
+    onFieldCountChange?.(fields.length);
+  }, [fields.length, onFieldCountChange]);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const token = await getToken();
@@ -390,6 +414,22 @@ export function DocumentPdfEditor({
       toast.error(message);
     },
   });
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flushFields: async () => {
+        if (readOnly) {
+          return;
+        }
+        if (!dirty) {
+          return;
+        }
+        await saveMutation.mutateAsync();
+      },
+    }),
+    [readOnly, dirty, saveMutation]
+  );
 
   // pageHostRef.clientWidth is the exact width available for the page wrap.
   // No max cap: on wide monitors users want the PDF to fill the editor area,
@@ -947,6 +987,8 @@ export function DocumentPdfEditor({
       ) : null}
     </div>
   );
-}
+});
+
+DocumentPdfEditor.displayName = "DocumentPdfEditor";
 
 export default DocumentPdfEditor;

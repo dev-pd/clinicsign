@@ -603,6 +603,27 @@ new aws.iam.RolePolicy(`clinicsign-ecs-task-policy-${stack}`, {
     ),
 });
 
+/** Lets SSM agent inside the task open channels for ECS Exec (Session Manager). No extra RDS exposure. */
+new aws.iam.RolePolicy(`clinicsign-ecs-task-exec-ssm-${stack}`, {
+  role: taskRole.name,
+  policy: JSON.stringify({
+    Version: "2012-10-17",
+    Statement: [
+      {
+        Sid: "ECSExecSSMMessages",
+        Effect: "Allow",
+        Action: [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+        ],
+        Resource: "*",
+      },
+    ],
+  }),
+});
+
 // The API image URI defaults to <ecr repo>:latest. Push that tag before expecting ECS to be healthy.
 const apiImageUri = infraConfig.get("apiImageUri") ?? pulumi.interpolate`${ecrRepo.repositoryUrl}:latest`;
 
@@ -670,10 +691,56 @@ new aws.ecs.Service(
         containerPort: apiContainerPort,
       },
     ],
+    enableExecuteCommand: true,
     tags: projectTag,
   },
   { dependsOn: [listener], ignoreChanges: ["desiredCount"] }
 );
+
+/** Attach to human break-glass principals (IAM user or role). Scoped to this cluster/service/task ARNs only. */
+const callerIdentity = aws.getCallerIdentityOutput({});
+const ecsExecOperatorPolicy = new aws.iam.Policy(`clinicsign-ecs-exec-operator-${stack}`, {
+  name: `clinicsign-ecs-exec-operator-${stack}`,
+  description: `ECS Exec into ClinicSign ${stack} API tasks only (RDS admin via task shell).`,
+  policy: pulumi.all([callerIdentity.accountId, cluster.arn]).apply(([accountId, clusterArn]) => {
+    const region = aws.config.region ?? "us-east-1";
+    const clusterName = clusterArn.split("/").pop();
+    if (!clusterName) throw new Error("Could not parse ECS cluster name from ARN");
+    const serviceName = `clinicsign-${stack}-api`;
+    const serviceArn = `arn:aws:ecs:${region}:${accountId}:service/${clusterName}/${serviceName}`;
+    const taskArnPattern = `arn:aws:ecs:${region}:${accountId}:task/${clusterName}/*`;
+    return JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "ClusterRead",
+          Effect: "Allow",
+          Action: ["ecs:DescribeClusters", "ecs:ListTasks"],
+          Resource: clusterArn,
+        },
+        {
+          Sid: "ServiceRead",
+          Effect: "Allow",
+          Action: ["ecs:DescribeServices"],
+          Resource: serviceArn,
+        },
+        {
+          Sid: "TaskExec",
+          Effect: "Allow",
+          Action: ["ecs:DescribeTasks", "ecs:ExecuteCommand"],
+          Resource: taskArnPattern,
+        },
+        {
+          Sid: "SSMSession",
+          Effect: "Allow",
+          Action: ["ssm:StartSession"],
+          Resource: [taskArnPattern, `arn:aws:ssm:${region}::document/AmazonECS_*`],
+        },
+      ],
+    });
+  }),
+  tags: projectTag,
+});
 
 // ---------------------------------------------------------------
 // CloudFront (HTTPS) in front of the ALB
@@ -756,3 +823,5 @@ export const vpcId = clinicsignVpc.id;
 export const albDnsName = alb.dnsName;
 export const cloudFrontDomainName = distribution.domainName;
 export const apiBaseUrl = pulumi.interpolate`https://${distribution.domainName}`;
+/** Attach to your IAM user or role, then use ECS Exec from the AWS CLI (Session Manager plugin required). */
+export const ecsExecOperatorPolicyArn = ecsExecOperatorPolicy.arn;

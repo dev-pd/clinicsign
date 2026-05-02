@@ -20,11 +20,18 @@ export async function sendDocumentForOrganization(
 ): Promise<Awaited<ReturnType<typeof getDocumentScoped>>> {
   const doc = await prisma.document.findFirst({
     where: { id: documentId, organizationId },
-    include: { recipients: true },
+    include: { recipients: true, fields: true },
   });
 
   if (!doc) {
     throw notFound("DOCUMENT_NOT_FOUND", "Document not found.");
+  }
+
+  if (doc.fields.length === 0) {
+    throw badRequest(
+      "NO_SIGNING_FIELDS",
+      "Add at least one field on the document and save before sending."
+    );
   }
 
   if (doc.status !== DocumentStatus.DRAFT) {

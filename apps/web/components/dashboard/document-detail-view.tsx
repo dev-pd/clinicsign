@@ -26,6 +26,7 @@ import {
   type ErrorInfo,
   type ReactNode,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useForm } from "react-hook-form";
@@ -78,6 +79,7 @@ import {
   voidDocument,
 } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import type { DocumentPdfEditorHandle } from "@/components/dashboard/document-pdf-editor";
 
 /** Prevents a thrown pdf.js / react-pdf error from blanking the whole dashboard shell. */
 class PdfShellErrorBoundary extends Component<
@@ -112,7 +114,10 @@ class PdfShellErrorBoundary extends Component<
 }
 
 const DocumentPdfEditor = dynamic(
-  () => import("@/components/dashboard/document-pdf-editor"),
+  () =>
+    import("@/components/dashboard/document-pdf-editor").then(
+      (m) => m.DocumentPdfEditor
+    ),
   {
     ssr: false,
     loading: () => (
@@ -144,6 +149,9 @@ export function DocumentDetailView({
   const queryClient = useQueryClient();
   const [sendOpen, setSendOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
+  const editorRef = useRef<DocumentPdfEditorHandle>(null);
+  /** Null until the editor first reports (avoid gating send on 0 before mount). */
+  const [editorFieldCount, setEditorFieldCount] = useState<number | null>(null);
 
   const detailQuery = useQuery({
     queryKey: ["document", documentId],
@@ -162,6 +170,7 @@ export function DocumentDetailView({
   const sendMutation = useMutation({
     mutationFn: async (values: SendFormValues) => {
       const token = await getToken();
+      await editorRef.current?.flushFields();
       return sendDocument(token, documentId, values);
     },
     onSuccess: (data) => {
@@ -270,6 +279,8 @@ export function DocumentDetailView({
   const recipient: ApiDocumentRecipient | null = doc.recipients[0] ?? null;
   const hasSignedPdf = Boolean(doc.signedPdfKey);
   const canSend = doc.status === "DRAFT";
+  const fieldCountForSend = editorFieldCount ?? doc.fields.length;
+  const canSendForSignature = fieldCountForSend > 0;
   const canResend = doc.status === "SENT" || doc.status === "VIEWED";
   const canVoid =
     doc.status === "DRAFT" ||
@@ -315,11 +326,13 @@ export function DocumentDetailView({
                   <CardContent className="pt-6">
                     <PdfShellErrorBoundary key={pdfEditorKey}>
                       <DocumentPdfEditor
+                        ref={editorRef}
                         documentId={documentId}
                         readOnly={doc.status !== "DRAFT"}
                         fields={doc.fields}
                         updatedAt={doc.updatedAt}
                         pdfVariant={hasSignedPdf ? "signed" : "original"}
+                        onFieldCountChange={setEditorFieldCount}
                       />
                     </PdfShellErrorBoundary>
                   </CardContent>
@@ -354,6 +367,12 @@ export function DocumentDetailView({
               recipient={recipient}
               hasSignedPdf={hasSignedPdf}
               canSend={canSend}
+              sendForSignatureEnabled={canSendForSignature}
+              sendBlockedHint={
+                canSend && !canSendForSignature
+                  ? "Place at least one field on the PDF before sending."
+                  : undefined
+              }
               canResend={canResend}
               canVoid={canVoid}
               isResending={resendMutation.isPending}
@@ -379,7 +398,8 @@ export function DocumentDetailView({
                 <DialogTitle>Send for signature</DialogTitle>
                 <DialogDescription>
                   We will email a secure link to complete and sign this
-                  document.
+                  document. Any fields you placed are saved automatically when
+                  you send.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-2">
@@ -471,6 +491,8 @@ function OverviewCard({
   recipient,
   hasSignedPdf,
   canSend,
+  sendForSignatureEnabled,
+  sendBlockedHint,
   canResend,
   canVoid,
   isResending,
@@ -491,6 +513,9 @@ function OverviewCard({
   recipient: ApiDocumentRecipient | null;
   hasSignedPdf: boolean;
   canSend: boolean;
+  sendForSignatureEnabled: boolean;
+  /** Shown as tooltip when Send is disabled on a draft (e.g. no fields). */
+  sendBlockedHint?: string;
   canResend: boolean;
   canVoid: boolean;
   isResending: boolean;
@@ -511,7 +536,15 @@ function OverviewCard({
   let primary: JSX.Element;
   if (canSend) {
     primary = (
-      <Button type="button" className={primaryClass} onClick={onSend}>
+      <Button
+        type="button"
+        className={primaryClass}
+        onClick={onSend}
+        disabled={!sendForSignatureEnabled}
+        title={
+          !sendForSignatureEnabled ? sendBlockedHint : undefined
+        }
+      >
         <Send className="mr-2 h-4 w-4" aria-hidden strokeWidth={2} />
         Send for signature
       </Button>

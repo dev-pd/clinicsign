@@ -171,6 +171,13 @@ export async function completeSigning(input: {
     throw badRequest("DOCUMENT_LOCKED", "This document can no longer be signed.");
   }
 
+  if (doc.fields.length === 0) {
+    throw badRequest(
+      "NO_FIELDS_TO_SIGN",
+      "This document has no fields to complete. Ask your provider to fix and resend."
+    );
+  }
+
   const fieldById = new Map(doc.fields.map((f) => [f.id, f]));
   const updates = new Map<string, string>();
 
