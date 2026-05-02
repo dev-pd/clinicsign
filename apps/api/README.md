@@ -236,6 +236,7 @@ Health check is `GET /health`, returns `{ status: "ok" }`. **It deliberately tou
 - Want Clerk webhooks against your laptop? `npm run tunnel:api` (ngrok) or `npm run tunnel:api:lt` (localtunnel), then register the tunnel URL + `/api/webhooks/clerk` in the Clerk dashboard. **Clerk requires HTTPS — that's why the tunnel exists.**
 - Prisma client out of sync after a pull? `npm run db:generate`.
 - Want to inspect what the API actually returned? Every response error has a `requestId`; grep it in CloudWatch (or local stdout in dev).
+- **Wipe all documents (demo cleanup)** — after deleting PDFs in S3 under `clinics/`, align Postgres: `DATABASE_URL` must reach RDS (see `rdsAllowedCidr` in `infra/` or run from a task that has VPC access). Then from `apps/api`: `npm run db:purge-documents` (runs [`scripts/purge-all-documents.sql`](./scripts/purge-all-documents.sql): `DELETE FROM "Document"` cascades fields, recipients, audit logs; **users / organizations stay**).
 
 ---
 

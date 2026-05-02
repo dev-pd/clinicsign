@@ -16,7 +16,8 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "seed": "tsx prisma/seed.ts",
-    "backfill:clerk-users": "tsx scripts/backfill-users-from-clerk.ts"
+    "backfill:clerk-users": "tsx scripts/backfill-users-from-clerk.ts",
+    "db:purge-documents": "prisma db execute --schema prisma/schema.prisma --file scripts/purge-all-documents.sql"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
